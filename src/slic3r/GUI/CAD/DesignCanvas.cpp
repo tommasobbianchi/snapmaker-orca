@@ -1342,6 +1342,11 @@ bool DesignCanvas::inline_has_focus() const
     return m_inline_editor && m_inline_editor->has_focus();
 }
 
+bool DesignCanvas::inline_type_char(int key)
+{
+    return m_inline_editor && m_inline_editor->type_char(key);
+}
+
 void DesignCanvas::inline_commit()
 {
     if (m_inline_editor) m_inline_editor->commit();
