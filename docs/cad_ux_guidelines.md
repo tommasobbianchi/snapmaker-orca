@@ -342,7 +342,7 @@ The authoritative version of this table is **`docs/ux/tool_atlas.json`**, which
 carries all 52 verbs with their preconditions and their refusal strings, taken
 from the code rather than from memory. Every state it produces — 20 selection
 kinds × 2 document states, 40 primary menus and 73 submenus — is rendered by
-`docs/ux/mockups/gen_offer_mockups.py` into `docs/ux/offer_atlas.html`. Read the
+`sandboxes/offer-mockups/gen_offer_mockups.py` into `sandboxes/offer-mockups/offer_atlas.html`. Read the
 atlas before proposing a change to the map; the generator refuses to render an
 address collision, so the map cannot silently rot.
 
@@ -608,7 +608,7 @@ Violating them, with removal scheduled:
   the user faces the full toolbar whatever they have picked, and finds out that
   a tool did not apply by it doing nothing. This is the largest single item of
   new work the charter asks for. The map and every state of it are already
-  drawn (`docs/ux/offer_atlas.html`); what the group owes itself before the code
+  drawn (`sandboxes/offer-mockups/offer_atlas.html`); what the group owes itself before the code
   is ratifying the row order, since every verb built before that lands has to be
   addressed afterwards anyway.
 - **Committing is an invisible click in empty space** rather than the

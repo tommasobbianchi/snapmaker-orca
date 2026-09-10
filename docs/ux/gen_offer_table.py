@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Emit the C++ offer table from docs/ux/tool_atlas.json.
 
-    python3 docs/ux/mockups/gen_offer_table.py
+    python3 docs/ux/gen_offer_table.py
 
 The map exists ONCE. The mockups and the shipping menu read the same rows in the same
 order from the same file, so a drawing and the product cannot drift apart — which is the
@@ -15,7 +15,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-UX = os.path.dirname(HERE)
+UX = HERE
 REPO = os.path.dirname(os.path.dirname(UX))
 ATLAS = os.path.join(UX, "tool_atlas.json")
 OUT = os.path.join(REPO, "src", "slic3r", "GUI", "CAD", "DesignOffer.hpp")
@@ -45,7 +45,7 @@ def main():
 
     lines = [
         "// GENERATED FILE — DO NOT EDIT.",
-        "// Source: docs/ux/tool_atlas.json   Generator: docs/ux/mockups/gen_offer_table.py",
+        "// Source: docs/ux/tool_atlas.json   Generator: docs/ux/gen_offer_table.py",
         "//",
         "// The object-driven tool offer (charter 4.1): every verb has ONE row index, that index",
         "// is the same in every selection it appears in, and verbs that do not apply are shown",

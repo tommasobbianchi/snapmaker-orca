@@ -1,165 +1,97 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
 ## Overview
 
-Snapmaker_Orca is an open-source 3D slicer application forked from Bambu Studio, built using C++ with wxWidgets for the GUI and CMake as the build system. The project uses a modular architecture with separate libraries for core slicing functionality, GUI components, and platform-specific code.
+Snapmaker Orca is a 3D slicer forked from OrcaSlicer (itself a Bambu Studio fork),
+C++17 with wxWidgets for the GUI and CMake as the build system. On the
+`feature/cad-primitives` branch it embeds a **parametric, sketch-first CAD "Design"
+tab**: draw 2D sketches on a plane, constrain them, turn them into solids
+(extrude/revolve/sweep/loft, fillet/chamfer/shell/draft/hole/thread, pattern,
+boolean), and commit straight to the plater — without leaving the slicer.
+
+The CAD model is a **recipe, not a mesh**: every action is a feature in an ordered
+tree replayed from the start on each change, so editing a dimension set twenty steps
+ago rebuilds everything downstream. The recipe is persisted inside the 3MF.
+
+### Design-tab layout
+
+| Area | Location | Role |
+|---|---|---|
+| Kernel | `src/libslic3r/CAD/` | `CadDocument` feature tree + `recompute()`, OCCT B-rep. OCCT is already linked for STEP import; the CAD module adds `TKFillet`/`TKOffset`. |
+| Solver | `src/libslic3r/slvs/` | Vendored SolveSpace `libslvs` 2D constraint solver (GPL-3.0). |
+| GUI | `src/slic3r/GUI/CAD/` | `DesignPanel`, `DesignCanvas`, `DesignSketchTool`, `SketchInlineEditor`, `DesignOffer`, `McpControl`. |
+| MCP control | `src/slic3r/GUI/McpControl.cpp` | Machine-controllable surface: JSON-RPC over a unix socket, off unless `SNAPORCA_MCP` is set. Facade over the same `CadDocument` the GUI drives — never a parallel engine. |
+| Tool offer | `docs/ux/tool_atlas.json` → `src/slic3r/GUI/CAD/DesignOffer.hpp` | Object-driven offer menu: point at geometry, the geometry offers the verbs that apply. `DesignOffer.hpp` is **generated** by `docs/ux/gen_offer_table.py`; the map lives once in `tool_atlas.json`. |
+
+### Forks and remotes
+
+- This repo is the Snapmaker base. Its twin (same CAD, mainline OrcaSlicer base) is
+  `tommasobbianchi/Orca-Cad`, maintained in parallel at ~17-identical/8-diverging file
+  parity across the shared CAD files.
+- Push to the `fork` remote only. **Never push to the upstream OrcaSlicer remotes.**
 
 ## Build Commands
 
-### Building on Windows
+### Linux
 ```bash
-# Build everything
-build_release_vs2022.bat
-
-# Build with debug symbols
-build_release_vs2022.bat debug
-
-# Build only dependencies
-build_release_vs2022.bat deps
-
-# Build only slicer (after deps are built)
-build_release_vs2022.bat slicer
-
-
+./build_linux.sh -u     # install system dependencies
+./build_linux.sh -dsi   # build deps + slicer + AppImage
+./build_linux.sh -d     # dependencies only
+./build_linux.sh -s     # slicer only
+./build_linux.sh -j N   # limit to N cores
+./build_linux.sh -b     # debug build
 ```
 
-### Building on macOS
+### macOS
 ```bash
-# Build everything (dependencies and slicer)
-./build_release_macos.sh
-
-# Build only dependencies
-./build_release_macos.sh -d
-
-# Build only slicer (after deps are built)
-./build_release_macos.sh -s
-
-# Use Ninja generator for faster builds
-./build_release_macos.sh -x
-
-# Build for specific architecture
-./build_release_macos.sh -a arm64    # or x86_64 or universal
-
-# Build for specific macOS version target
-./build_release_macos.sh -t 11.3
+./build_release_macos.sh          # everything
+./build_release_macos.sh -d       # deps only
+./build_release_macos.sh -s       # slicer only
+./build_release_macos.sh -a arm64 # architecture
 ```
 
-### Building on Linux
+### Windows
 ```bash
-# First time setup - install system dependencies
-./build_linux.sh -u
-
-# Build dependencies and slicer
-./build_linux.sh -dsi
-
-# Build everything (alternative)
-./build_linux.sh -dsi
-
-# Individual options:
-./build_linux.sh -d    # dependencies only
-./build_linux.sh -s    # slicer only  
-./build_linux.sh -i    # build AppImage
-
-# Performance and debug options:
-./build_linux.sh -j N  # limit to N cores
-./build_linux.sh -1    # single core build
-./build_linux.sh -b    # debug build
-./build_linux.sh -c    # clean build
-./build_linux.sh -r    # skip RAM/disk checks
-./build_linux.sh -l    # use Clang instead of GCC
+build_release_vs2022.bat          # everything
+build_release_vs2022.bat deps     # deps only
+build_release_vs2022.bat slicer   # slicer only
 ```
 
-### Build System
-- Uses CMake with minimum version 3.13 (maximum 3.31.x on Windows)
-- Primary build directory: `build/`
-- Dependencies are built in `deps/build/`
-- The build process is split into dependency building and main application building
-- Windows builds use Visual Studio generators
-- macOS builds use Xcode by default, Ninja with -x flag
-- Linux builds use Ninja generator
+### Build system
+- CMake ≥ 3.13. Primary build dir `build/`, deps in `deps/build/`.
+- The official CI (`build_linux.sh -ur`, `-dr`, `-isr`) builds the **pinned** deps
+  first; do not substitute apt-installed OCCT/OpenCV/paho for the pinned ones.
 
-### Testing
-Run all tests after building:
+## Testing
+
 ```bash
-cd build && ctest
+cd build && ctest                        # all suites
+./tests/libslic3r/libslic3r_tests        # kernel suite, incl. [CadDocument]
 ```
 
-Run tests with verbose output:
+Kernel code is Catch2-tested (`tests/libslic3r/`); the GUI layer (`src/slic3r/GUI/CAD`)
+has no unit tests — its coverage is the headless rig (`scripts/CAD/`) driven over the
+MCP socket. Before committing, the offer-table check must pass:
+
 ```bash
-cd build && ctest --output-on-failure
+python3 docs/ux/gen_offer_table.py --check
 ```
 
-Run individual test suites:
-```bash
-# From build directory
-./tests/libslic3r/libslic3r_tests
-./tests/fff_print/fff_print_tests
-./tests/sla_print/sla_print_tests
-```
+## Development conventions
 
-## Development Workflow
-
-### Code Style and Standards
-- **C++17 standard** with selective C++20 features
-- **Naming conventions**: PascalCase for classes, snake_case for functions/variables
-- **Header guards**: Use `#pragma once` 
-- **Memory management**: Prefer smart pointers, RAII patterns
-- **Thread safety**: Use TBB for parallelization, be mindful of shared state
-
-### Common Development Tasks
-
-#### Adding New Print Settings
-1. Define setting in `PrintConfig.cpp` with proper bounds and defaults
-2. Add UI controls in appropriate GUI components  
-3. Update serialization in config save/load
-4. Add tooltips and help text for user guidance
-5. Test with different printer profiles
-
-#### Modifying Slicing Algorithms  
-1. Core algorithms live in `libslic3r/` subdirectories
-2. Performance-critical code should be profiled and optimized
-3. Consider multi-threading implications (TBB integration)
-4. Validate changes don't break existing profiles
-5. Add regression tests where appropriate
-
-#### GUI Development
-1. GUI code resides in `src/slic3r/GUI/` (not visible in current tree)
-2. Use existing wxWidgets patterns and custom controls
-3. Support both light and dark themes
-4. Consider DPI scaling on high-resolution displays
-5. Maintain cross-platform compatibility
-
-#### Adding Printer Support
-1. Create JSON profile in `resources/profiles/[manufacturer].json`
-2. Add printer-specific start/end G-code templates
-3. Configure build volume, capabilities, and material compatibility
-4. Test thoroughly with actual hardware when possible
-5. Follow existing profile structure and naming conventions
-
-### Dependencies and Build System
-- **CMake-based** with separate dependency building phase
-- **Dependencies** built once in `deps/build/`, then linked to main application  
-- **Cross-platform** considerations important for all changes
-- **Resource files** embedded at build time, platform-specific handling
-
-## Important Development Notes
-
-### Codebase Navigation
-- Use search tools extensively - codebase has 500k+ lines
-- Key entry points: `src/Snapmaker_Orca.cpp` for application startup
-- Core slicing: `libslic3r/Print.cpp` orchestrates the slicing pipeline
-- Configuration: `PrintConfig.cpp` defines all print/printer/material settings
-
-### Compatibility and Stability
-- **Backward compatibility** maintained for project files and profiles
-- **Cross-platform** support essential (Windows/macOS/Linux)  
-- **File format** changes require careful version handling
-- **Profile migrations** needed when settings change significantly
-
-### Quality and Testing
-- **Regression testing** important due to algorithm complexity
-- **Performance benchmarks** help catch performance regressions
-- **Memory leak** detection important for long-running GUI application
-- **Cross-platform** testing required before releases
+- **C++17**, PascalCase classes, snake_case functions/locals; 4-space indent,
+  140-column limit (`.clang-format`).
+- Kernel changes land in `libslic3r/CAD` and are exercised headlessly (Catch2); GUI
+  changes in `slic3r/GUI/CAD` are verified on the rig or a display, not trusted from a
+  clean build.
+- The offer table is generated from `docs/ux/tool_atlas.json` — edit the atlas, never
+  hand-edit `DesignOffer.hpp`. Row order is ratified; changing an index breaks every
+  user's muscle memory.
+- Mockups and point-in-time plans/prototypes live in `sandboxes/`, not in `docs/`.
+  `docs/` holds only the high-level design and the key technical decisions
+  (`design_tab.md`, `cad_ux_guidelines.md`, `cad_dependency_weight.md`,
+  `design_tab_upstream_portability.md`, `GAP_ANALYSIS_vs_ONSHAPE.md`).
+- `deps/` and `deps_src/` are vendored snapshots — do not modify without mirroring the
+  upstream tag.
