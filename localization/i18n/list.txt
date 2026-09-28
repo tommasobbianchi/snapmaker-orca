@@ -180,7 +180,12 @@ src/slic3r/Utils/Flashforge.cpp
 src/slic3r/GUI/Jobs/OAuthJob.cpp
 src/slic3r/GUI/BackgroundSlicingProcess.cpp
 src/slic3r/GUI/Gizmos/GLGizmoBrimEars.cpp
-src/slic3r/GUI/DesignPanel.cpp
 src/slic3r/GUI/ConfigWizard.cpp
 src/slic3r/GUI/MixedFilamentDialog.cpp
 src/slic3r/GUI/SMPhysicalPrinterDialog.cpp
+src/slic3r/GUI/CAD/DesignPanel.cpp
+src/slic3r/GUI/CAD/DesignSketchTool.cpp
+src/slic3r/GUI/CAD/SketchInlineEditor.cpp
+src/slic3r/GUI/CAD/DesignOffer.hpp
+src/slic3r/GUI/Gizmos/GLGizmoPrimitive.cpp
+src/slic3r/GUI/Gizmos/GLGizmoSketch.cpp
