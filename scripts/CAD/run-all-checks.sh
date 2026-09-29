@@ -17,7 +17,7 @@ set -uo pipefail
 # It was scripts/ladder-all.sh when it was written; the move (ea5f25e8b9) fixed the three
 # sibling scripts and missed this one, which left every rung looking for its own path under
 # scripts/scripts/ and reporting seven instant failures that were all the same typo.
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 
 C="${C:-snaporca-gui}"
 CORPUS="${CORPUS:-/corpus}"
@@ -38,6 +38,7 @@ step() {
 # that reads like a dead app rather than a wrong display. State it rather than rely on the default.
 RIG_DISPLAY="${RIG_DISPLAY:-:10}"
 
+# shellcheck disable=SC2329  # called from the rung table below
 run_in_rig() {                      # copy the script in fresh, then run it there
     docker cp "$1" "$C:/tmp/$(basename "$1")" >/dev/null || return 1
     shift

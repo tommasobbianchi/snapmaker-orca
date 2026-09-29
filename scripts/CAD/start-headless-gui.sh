@@ -139,6 +139,7 @@ done
 # --- main window ----------------------------------------------------------------------------
 main="$(xdotool search --name "Untitled" 2>/dev/null | head -1 || true)"
 if [ -n "$main" ]; then
+    # shellcheck disable=SC2086  # "WxH" -> "W H": two arguments, so the split is wanted
     xdotool windowmove "$main" 0 0 windowsize "$main" ${GEOM/x/ } 2>/dev/null || true
     xdotool windowactivate "$main" 2>/dev/null || true
     sleep 2

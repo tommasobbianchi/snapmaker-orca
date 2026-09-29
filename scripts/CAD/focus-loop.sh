@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2029  # $SRC, $BIN, $DISP, $TRACE are this machine's settings: expanding them here is the point
 # One turn of the keyboard-focus convergence loop, start to verdict, with no human in it.
 #
 #   scripts/CAD/focus-loop.sh              # full turn: sync -> build -> restart -> assert
