@@ -7555,10 +7555,19 @@ void GLCanvas3D::_render_objects(GLVolumeCollection::ERenderType type, bool with
         m_volumes.set_show_sinking_contours(!m_gizmos.is_hiding_instances());
 
     GLShaderProgram* shader = wxGetApp().get_shader("gouraud");
+    // Studio lighting (see m_studio_lighting): a mode of the gouraud shader here, which other
+    // renders use too, so it is switched off again before the shader is released below.
+    const bool studio = m_studio_lighting && shader != nullptr;
     ECanvasType canvas_type = this->m_canvas_type;
     bool                 partly_inside_enable = canvas_type == ECanvasType::CanvasAssembleView ? false : true;
     if (shader != nullptr) {
         shader->start_using();
+
+        shader->set_uniform("lighting_model", studio ? 1 : 0);
+        if (studio) {
+            const Transform3d& view = wxGetApp().plater()->get_camera().get_view_matrix();
+            shader->set_uniform("world_up_eye", Vec3f((view.matrix().block<3, 3>(0, 0) * Vec3d::UnitZ()).cast<float>()));
+        }
 
         const Size&   cvn_size = get_canvas_size();
         {
@@ -7651,6 +7660,8 @@ void GLCanvas3D::_render_objects(GLVolumeCollection::ERenderType type, bool with
             shader->set_uniform("show_wireframe", false);
         }*/
 
+        if (studio)
+            shader->set_uniform("lighting_model", 0);
         shader->stop_using();
     }
 
