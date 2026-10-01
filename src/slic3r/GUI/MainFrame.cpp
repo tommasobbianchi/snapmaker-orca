@@ -1030,6 +1030,15 @@ void MainFrame::show_option(bool show)
     }
 }
 
+void MainFrame::set_undo_redo_enabled(bool undo, bool redo)
+{
+#ifndef __APPLE__
+    m_topbar->EnableUndoRedo(undo, redo);
+#else
+    (void) undo; (void) redo;   // macOS has no top bar; Edit asks the tab when it opens
+#endif
+}
+
 #ifdef SLIC3R_CAD
 DesignPanel* MainFrame::shown_design_panel() const
 {
@@ -1113,6 +1122,11 @@ void MainFrame::init_tabpanel() {
         else {
             m_topbar->DisableUndoRedoItems();
         }
+#endif
+#ifdef SLIC3R_CAD
+        // Design keeps its own history, and the top bar's Undo/Redo drive it while it is shown.
+        if (m_design_panel != nullptr && panel == m_design_page)
+            m_design_panel->update_undo_redo_buttons();
 #endif
 
         // Notify WCP page state change subscribers
@@ -2188,6 +2202,10 @@ void MainFrame::on_dpi_changed(const wxRect& suggested_rect)
         m_multi_machine->msw_rescale();
     if(m_calibration)
         m_calibration->msw_rescale();
+#ifdef SLIC3R_CAD
+    if (m_design_panel)
+        m_design_panel->msw_rescale();
+#endif
 
     // BBS
 #if 0
@@ -2249,6 +2267,10 @@ void MainFrame::on_sys_color_changed()
         m_monitor->on_sys_color_changed();
     if(m_calibration)
         m_calibration->on_sys_color_changed();
+#ifdef SLIC3R_CAD
+    if (m_design_panel)
+        m_design_panel->on_sys_color_changed();
+#endif
     // update Tabs
     for (auto tab : wxGetApp().tabs_list)
         tab->sys_color_changed();
