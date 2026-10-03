@@ -913,6 +913,10 @@ void MainFrame::update_layout()
 void MainFrame::shutdown(bool isRecreate)
 {
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "MainFrame::shutdown enter";
+#ifdef SLIC3R_CAD
+    if (m_design_panel != nullptr)
+        m_design_panel->shutdown();
+#endif
     // BBS: backup
     Slic3r::set_backup_callback(nullptr);
 #ifdef _WIN32
@@ -2888,8 +2892,19 @@ void MainFrame::init_menubar_as_editor()
 
         append_menu_item(
             viewMenu, wxID_ANY, _L("Reset Window Layout"), _L("Reset to default window layout"),
-            [this](wxCommandEvent&) { m_plater->reset_window_layout(); }, "", this,
+            [this](wxCommandEvent&) {
+                m_plater->reset_window_layout();
+#ifdef SLIC3R_CAD
+                // The Design tab docks its own sidebar.
+                if (m_design_panel != nullptr)
+                    m_design_panel->reset_window_layout();
+#endif
+            }, "", this,
             [this]() {
+#ifdef SLIC3R_CAD
+                if (shown_design_panel() != nullptr)
+                    return true;
+#endif
                 return (m_tabpanel->GetSelection() == TabPosition::tp3DEditor || m_tabpanel->GetSelection() == TabPosition::tpPreview) &&
                        m_plater->is_sidebar_enabled();
             },

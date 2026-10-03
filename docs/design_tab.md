@@ -381,6 +381,11 @@ The camera navigates as in Prepare, including the swapped-buttons preference. Th
 scale, live; the status line and the active tool's values are drawn in the viewport itself,
 so they go away with the tab and with the window.
 
+The sidebar docks like Prepare's: drag its caption to the other side or out into its own window,
+drag its edge to resize it, and collapse it with the button on the canvas edge or `Shift+Tab`.
+Its layout is remembered separately from Prepare's and starts where Prepare's sidebar is, at its
+width; View > Reset Window Layout resets both tabs. A floating sidebar hides with the tab.
+
 ---
 
 ## Known limitations
