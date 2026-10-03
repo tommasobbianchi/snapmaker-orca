@@ -58,6 +58,12 @@ in vec2 intensity;
 in vec4 world_pos;
 in float world_normal_z;
 in vec3 eye_normal;
+in vec3 eye_position;
+
+// 1 = the Design tab's studio lighting (studio_shade below); 0 = the per-vertex two-light model,
+// which every other render keeps. world_up_eye is world +Z in eye space.
+uniform int lighting_model;
+uniform vec3 world_up_eye;
 
 vec3 getBackfaceColor(vec3 fill) {
     float brightness = 0.2126 * fill.r + 0.7152 * fill.g + 0.0722 * fill.b;
@@ -126,6 +132,26 @@ float DetectSilho(vec2 fragCoord)
 
 out vec4 out_color;
 
+// Studio lighting for the Design tab (lighting_model == 1), per fragment. The default model
+// lights every face from near the camera, so the sides of a part come out in nearly the same
+// tone. This one separates faces by their orientation in the WORLD (a sky/ground hemisphere),
+// keeps a strong key light from the upper left and a weak fill from the right, gives a
+// plastic-like highlight, and darkens the base toward the silhouette with a faint sheen there.
+vec3 studio_shade(vec3 base, vec3 n, vec3 v)
+{
+    vec3 key  = normalize(vec3(-0.45, 0.60, 0.66));
+    vec3 fill = normalize(vec3(0.70, -0.15, 0.70));
+    float hemi = 0.5 + 0.5 * dot(n, normalize(world_up_eye));
+    vec3 ambient = mix(vec3(0.16, 0.15, 0.14), vec3(0.40, 0.42, 0.46), hemi);
+    float kd = max(dot(n, key), 0.0);
+    float fd = max(dot(n, fill), 0.0);
+    vec3 diffuse = ambient + vec3(0.60) * kd + vec3(0.20) * fd;
+    float spec = 0.28 * pow(max(dot(n, normalize(key + v)), 0.0), 48.0)
+               + 0.06 * pow(max(dot(n, normalize(fill + v)), 0.0), 24.0);
+    float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0);
+    return base * diffuse * (1.0 - 0.30 * rim) + vec3(spec + 0.08 * rim);
+}
+
 void main()
 {
     if (any(lessThan(clipping_planes_dots, ZERO)))
@@ -167,9 +193,11 @@ void main()
 	}
 	color.rgb = (any(lessThan(pv_check_min, ZERO)) || any(greaterThan(pv_check_max, ZERO))) ? mix(color.rgb, ZERO, 0.3333) : color.rgb;
 
+    vec3 lit = (lighting_model == 1) ? studio_shade(color.rgb, normalize(eye_normal), normalize(-eye_position))
+                                     : vec3(intensity.y) + color.rgb * intensity.x;
     //BBS: add outline_color
     if (is_outline) {
-        color = vec4(vec3(intensity.y) + color.rgb * intensity.x, color.a);
+        color = vec4(lit, color.a);
         vec2 fragCoord = gl_FragCoord.xy;
         float s = DetectSilho(fragCoord);
         // Makes silhouettes thicker.
@@ -185,5 +213,5 @@ void main()
         out_color = vec4(0.45 * texture(environment_tex, normalize(eye_normal).xy * 0.5 + 0.5).xyz + 0.8 * color.rgb * intensity.x, color.a);
 #endif
     else
-        out_color = vec4(vec3(intensity.y) + color.rgb * intensity.x, color.a);
+        out_color = vec4(clamp(lit, vec3(0.0), vec3(1.0)), color.a);
 }

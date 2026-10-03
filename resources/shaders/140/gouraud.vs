@@ -50,6 +50,7 @@ out float color_clip_plane_dot;
 out vec4 world_pos;
 out float world_normal_z;
 out vec3 eye_normal;
+out vec3 eye_position;
 
 void main()
 {
@@ -62,6 +63,7 @@ void main()
 
 	intensity.x = INTENSITY_AMBIENT + NdotL * LIGHT_TOP_DIFFUSE;
     vec4 position = view_model_matrix * vec4(v_position, 1.0);
+    eye_position = position.xyz;
     intensity.y = LIGHT_TOP_SPECULAR * pow(max(dot(-normalize(position.xyz), reflect(-LIGHT_TOP_DIR, eye_normal)), 0.0), LIGHT_TOP_SHININESS);
 
 	// Perform the same lighting calculation for the 2nd light source (no specular applied).

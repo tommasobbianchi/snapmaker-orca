@@ -10,14 +10,14 @@
 #   FULL=1 scripts/CAD/run-all-checks.sh          # corpus over ALL 997 sheets (~25 min)
 #   SKIP_GUI=1 scripts/CAD/run-all-checks.sh      # kernel only, for a machine with no rig
 #
-# The rig container is expected to be up with the app running and SNAPORCA_MCP set; bring it up
+# The rig container is expected to be up with the app running and ORCA_CAD_MCP set; bring it up
 # with scripts/CAD/start-headless-gui.sh inside it. The corpus lives at /corpus in that container.
 set -uo pipefail
 # ../.. — this script lives in scripts/CAD/, so one level up is scripts/, not the repo root.
 # It was scripts/ladder-all.sh when it was written; the move (ea5f25e8b9) fixed the three
 # sibling scripts and missed this one, which left every rung looking for its own path under
 # scripts/scripts/ and reporting seven instant failures that were all the same typo.
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 
 C="${C:-snaporca-gui}"
 CORPUS="${CORPUS:-/corpus}"
@@ -38,6 +38,7 @@ step() {
 # that reads like a dead app rather than a wrong display. State it rather than rely on the default.
 RIG_DISPLAY="${RIG_DISPLAY:-:10}"
 
+# shellcheck disable=SC2329  # called from the rung table below
 run_in_rig() {                      # copy the script in fresh, then run it there
     docker cp "$1" "$C:/tmp/$(basename "$1")" >/dev/null || return 1
     shift
@@ -50,7 +51,7 @@ run_in_rig() {                      # copy the script in fresh, then run it ther
 # 92-row array, so the last verb was unreachable (snaporca-z8rs, snaporca-ziam).
 step "offer table matches the atlas" python3 docs/ux/gen_offer_table.py --check
 
-step "kernel suite" scripts/CAD/run-kernel-tests.sh --vol "${KVOL:-snaporca_kerneltest}"
+step "kernel suite" scripts/CAD/run-kernel-tests.sh --vol "${KVOL:-orcacad_kerneltest}"
 
 if [ -z "${SKIP_GUI:-}" ]; then
     step "engine ladder (rungs 1-8, scripted geometry)" \
@@ -62,7 +63,7 @@ if [ -z "${SKIP_GUI:-}" ]; then
     step "gesture ladder (mouse and keyboard)" \
         run_in_rig scripts/CAD/check-gui-sketching.py /tmp/check-gui-sketching.py
     # The offer ladder needs TWO extra things the others do not: the app must have been launched
-    # with SNAPORCA_KEYTRACE=1 (its [OFFER] lines are the whole instrument), and it reads the
+    # with ORCA_CAD_KEYTRACE=1 (its [OFFER] lines are the whole instrument), and it reads the
     # generated offer table to predict what each selection should show — which is not in the
     # container's own baked source tree, so it is copied in beside the script — /tmp, where
     # run_in_rig puts the script, is one of the paths the ladder looks in.

@@ -26,8 +26,8 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${IMAGE:-snaporca-deps}"
 VOL="${BUILD_VOL:-snaporca_buildcache}"
 # No exclusions. Both cases that used to be quarantined now run: the solver SIGABRT on
-# circle-line tangency is fixed (snaporca-tkz), and the internal-thread case turned out to have
-# correct geometry and a wrong reference in the test (snaporca-kzy). A green run here now means
+# circle-line tangency is fixed (tkz), and the internal-thread case turned out to have
+# correct geometry and a wrong reference in the test (kzy). A green run here now means
 # the whole CAD suite passed, not "everything except the two we gave up on".
 #
 # ...and that claim was still not true, because the default tag was [CadDocument] alone while

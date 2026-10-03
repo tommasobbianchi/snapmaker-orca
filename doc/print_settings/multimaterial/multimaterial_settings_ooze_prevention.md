@@ -13,3 +13,7 @@ To reduce the waiting time after tool change, Orca can preheat the next tool whi
 ## Preheat steps
 
 Insert multiple preheat commands (e.g. M104.1). Only useful for Prusa XL. For other printers, please set it to 1.
+
+## Preheat delta temperature
+
+Allow user to set the Preheat temperature. If target temperature is 220 and Preheat delta temperature is -30, then the preheat temperature will be 190.

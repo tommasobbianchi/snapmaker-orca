@@ -99,6 +99,7 @@
 #include "GUI.hpp"
 #include "GUI_App.hpp"
 #include "GUI_ObjectList.hpp"
+#include "AuiMgr.hpp"
 #include "GUI_Utils.hpp"
 #include "GUI_Factories.hpp"
 #include "wxExtensions.hpp"
@@ -8380,28 +8381,6 @@ enum ExportingStatus{
     EXPORTING_TO_LOCAL
 };
 
-
-// TODO: listen on dark ui change
-class FloatFrame : public wxAuiFloatingFrame
-{
-public:
-    FloatFrame(wxWindow* parent, wxAuiManager* ownerMgr, const wxAuiPaneInfo& pane) : wxAuiFloatingFrame(parent, ownerMgr, pane)
-    {
-        wxGetApp().UpdateFrameDarkUI(this);
-    }
-};
-
-class AuiMgr : public wxAuiManager
-{
-public:
-    AuiMgr() : wxAuiManager(){}
-
-    virtual wxAuiFloatingFrame* CreateFloatingFrame(wxWindow* parent, const wxAuiPaneInfo& p) override
-    {
-        return new FloatFrame(parent, this, p);
-    }
-};
-
 // Plater / private
 struct Plater::priv
 {
@@ -10894,15 +10873,28 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
     //    q->model().stl_design_country = "";
     //}
 
-    // A CAD project legitimately carries no mesh: the model lives in the feature tree
-    // (Metadata/SnapOrca_cad.bin) until it is committed to the plate. Warning "no geometry data"
-    // for one is false, and it is the LAST thing a user sees after opening a design they spent an
-    // hour on — it reads as "your work is gone" when the recipe has in fact just been loaded and
-    // the Design tab will rehydrate it. Count the recipe as geometry.
-    if (tolal_model_count <= 0 && !loaded_cad_recipe && !q->m_exported_file) {
+    // A CAD project legitimately carries no mesh: the model lives in the feature tree until it is
+    // committed to the plate. Warning "no geometry data" for one is false, and it is the LAST thing
+    // a user sees after opening a design they spent an hour on — it reads as "your work is gone"
+    // when the recipe has in fact just been loaded and the Design tab will rehydrate it. Count a
+    // recipe that came from THESE files as geometry.
+    //
+    // Only where the Design tab can actually show it, though. With the CAD feature switched off
+    // (or not built) the recipe is still carried through to the next save, but nothing will
+    // display it, so an empty plate needs saying — and saying why.
+    bool cad_can_show = false;
+#ifdef SLIC3R_CAD
+    cad_can_show = wxGetApp().is_enable_cad_feature();
+#endif
+    if (tolal_model_count <= 0 && !q->m_exported_file && (!loaded_cad_recipe || !cad_can_show)) {
         dlg.Hide();
         if (!is_user_cancel) {
-            MessageDialog msg(wxGetApp().mainframe, _L("The file does not contain any geometry data."), _L("Warning"), wxYES | wxICON_WARNING);
+            const wxString text = loaded_cad_recipe
+                ? _L("This project contains a model made in the Design tab and no other geometry. "
+                     "Enable \"CAD feature (experimental)\" in Preferences and restart to see and edit it; "
+                     "it is kept when the project is saved.")
+                : _L("The file does not contain any geometry data.");
+            MessageDialog msg(wxGetApp().mainframe, text, _L("Warning"), wxYES | wxICON_WARNING);
             if (msg.ShowModal() == wxID_YES) {}
         }
     }
@@ -14632,26 +14624,9 @@ bool Plater::priv::init_collapse_toolbar()
     if (!collapse_toolbar.init(background_data))
         return false;
 
-    collapse_toolbar.set_layout_type(GLToolbar::Layout::Vertical);
-    collapse_toolbar.set_horizontal_orientation(GLToolbar::Layout::HO_Right);
-    collapse_toolbar.set_vertical_orientation(GLToolbar::Layout::VO_Top);
-    collapse_toolbar.set_border(4.0f);
-    collapse_toolbar.set_separator_size(4);
-    collapse_toolbar.set_gap_size(2);
-
-    collapse_toolbar.del_all_item();
-
-    GLToolbarItem::Data item;
-
-    item.name = "collapse_sidebar";
-    // set collapse svg name
-    item.icon_filename = "collapse.svg";
-    item.sprite_id = 0;
-    item.left.action_callback = []() {
-        wxGetApp().plater()->collapse_sidebar(!wxGetApp().plater()->is_sidebar_collapsed());
-    };
-
-    if (!collapse_toolbar.add_item(item))
+    if (!setup_collapse_toolbar(collapse_toolbar, []() {
+            wxGetApp().plater()->collapse_sidebar(!wxGetApp().plater()->is_sidebar_collapsed());
+        }))
         return false;
 
     // Now "collapse" sidebar to current state. This is done so the tooltip

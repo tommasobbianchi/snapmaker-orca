@@ -12,6 +12,14 @@ Width of the prime tower.
 
 Width of the brim around the prime tower.
 
+## Brim chamfer
+
+Enable gradual layer-by-layer reduction of the brim around the prime tower. This creates a chamfered/tapered effect, reducing material usage while maintaining first layer adhesion.
+
+## Max chamfer width
+
+Maximum width of the chamfer zone measured from the tower perimeter. The brim will reduce within this distance. Larger values create a more gradual taper but take more layers to complete.
+
 ## Wipe Tower Rotation Angle
 
 Wipe tower rotation angle with respect to x-axis.
