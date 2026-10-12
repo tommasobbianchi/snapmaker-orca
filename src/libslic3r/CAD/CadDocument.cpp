@@ -4080,8 +4080,13 @@ bool CadDocument::deserialize_recipe(const std::string& blob)
             return ok;
         }
         if (v == 4) {
-            // Pre-framing flat path, unchanged: v4 projects keep opening exactly as before.
-            ar(features);
+            // Pre-framing flat path: v4 projects keep opening, read with the FROZEN v4 field list
+            // (CadFeature::load_flat_v4) so fields appended to the framed layout since cannot shift
+            // every byte after them.
+            cereal::size_type n = 0;
+            ar(cereal::make_size_tag(n));
+            features.assign(size_t(n), CadFeature{});
+            for (CadFeature& f : features) f.load_flat_v4(ar);
             ar(variables);
             return recompute();
         }

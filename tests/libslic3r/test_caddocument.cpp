@@ -2142,7 +2142,14 @@ TEST_CASE("a v4 project still opens", "[CadDocument][recipe]")
         uint32_t v;
         ar(v);
         REQUIRE(v == 4);
-        ar(flat);
+        // Reference read of the flat v4 layout with the frozen v4 field list.
+        cereal::size_type n = 0;
+        ar(cereal::make_size_tag(n));
+        flat.assign(size_t(n), CadFeature{});
+        for (CadFeature& f : flat) f.load_flat_v4(ar);
+        std::map<std::string, std::string> vars;
+        ar(vars);
+        CHECK(iss.peek() == std::char_traits<char>::eof());
     }
     REQUIRE_FALSE(flat.empty());
 
@@ -4070,7 +4077,12 @@ TEST_CASE("golden recipe v1 still deserialises", "[CadDocument]")
         uint32_t v;
         ar(v);
         REQUIRE(v <= CadDocument::ORCA_CAD_RECIPE_VERSION);
-        ar(features);
+        // The golden blob is a flat (pre-framing) stream: read it with the FROZEN field list. Reading
+        // it through load() would shift every byte the moment a field is appended there.
+        cereal::size_type n = 0;
+        ar(cereal::make_size_tag(n));
+        features.assign(size_t(n), CadFeature{});
+        for (CadFeature& f : features) f.load_flat_v4(ar);
     }
 
     CadDocument expected = make_golden_doc_v1();

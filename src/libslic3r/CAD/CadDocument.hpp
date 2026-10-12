@@ -431,6 +431,50 @@ struct CadFeature {
                loft_start_cond, loft_end_cond);
         imported_solid = brep_from_string(brep);
     }
+    // The pre-framing (v4) layout, FROZEN. A v4 recipe is one flat stream with no per-feature
+    // length, so it can only be read with exactly the field list it was written with; reading it
+    // through load() breaks the moment a field is appended there (every field added since v5 is
+    // appended ONLY to save()/load(), never here).
+    template<class Archive>
+    void load_flat_v4(Archive& ar) {
+        std::string brep;
+        ar(type, name, enabled, shape, plane, width, height, radius,
+           profile, entities, constraints, entity_constraints, imported_regions,
+           import_offset, import_scale_x, import_scale_y, import_on_face, import_face_body,
+           sketch_ref, distance, symmetric, mode, extrude_end, distance2, taper_deg, flip,
+           up_to_face, extrude_src_face, up_to_point, target_body,
+           dressup_size, face_group, dressup_edge,
+           hole_diameter, hole_depth, hole_through, hole_x, hole_y,
+           thread_radius, thread_pitch, thread_height, thread_depth, thread_internal, thread_x, thread_y,
+           shell_thickness, shell_face,
+           draft_face, draft_angle,
+           revolve_angle, revolve_axis,
+           sweep_path_ref, loft_profile_refs, loft_ruled,
+           pattern_circular, pattern_count, pattern_spacing, pattern_dir, pattern_angle,
+           plane_base, plane_offset, plane_angle_tilt, plane_axis,
+           bool_tool_body, bool_keep_tool, bool_tolerance, bool_target_face, bool_tool_face,
+           cut_offset, cut_flip, cut_keep_upper, cut_keep_lower,
+           brep,
+           plane_type, plane_face_body, plane_face, plane_face2_body, plane_face2,
+           plane_edge_body, plane_edge, plane_edge2_body, plane_edge2, plane_u_size, plane_v_size,
+           mirror_keep_original,
+           axis_type, axis_p1, axis_p2, axis_body, axis_face, axis_edge, axis_plane_a, axis_plane_b,
+           coordsys_type, coordsys_point, coordsys_body, coordsys_face, coordsys_edge, coordsys_x_hint,
+           helix_radius, helix_pitch, helix_height, helix_left_handed, helix_taper_deg,
+            xf_translate, xf_axis, xf_pivot, xf_angle_deg, xf_copy,
+            thicken_face, thicken_thickness, thicken_flip,
+            cut_face_body, cut_face,
+             project_source_body, project_edges, project_face,
+               delete_faces,
+               hole_style, hole_cbore_diameter, hole_cbore_depth,
+               hole_csink_diameter, hole_csink_angle, hole_standard,
+               rib_sketch_ref, rib_entity, rib_thickness, rib_depth,
+                pattern_curve_sketch, pattern_curve_entity,
+               expr,
+               mate_kind, mate_cs_a, mate_cs_b, mate_offset, mate_angle, mate_flip,
+               coordsys_face_kind, coordsys_face_edges);
+        imported_solid = brep_from_string(brep);
+    }
 };
 
 // Serialize a TopoDS_Shape to/from a BRep string for cereal persistence.
