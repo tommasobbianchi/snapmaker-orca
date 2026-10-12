@@ -295,6 +295,11 @@ struct CadFeature {
     int              project_source_body{-1};   // body owning the edges; -1 = last body
     std::vector<int> project_edges;             // global edge ids to project; empty => use project_face
     int              project_face{-1};          // if project_edges empty, project every edge of this face
+    // Loft end conditions for the FIRST / LAST profile: 0 = Contact (the surface just starts at the
+    // profile), 1 = Normal to profile (it leaves along the profile's plane normal). Ignored for a ruled
+    // loft, whose straight sections have no end condition to give.
+    int loft_start_cond{0};
+    int loft_end_cond{0};
 
     // Direct edit: faces to remove (global face indices into target_body's shape),
     // healed via BRepAlgoAPI_Defeaturing.
@@ -357,7 +362,8 @@ struct CadFeature {
                pattern_curve_sketch, pattern_curve_entity,
                expr,
                mate_kind, mate_cs_a, mate_cs_b, mate_offset, mate_angle, mate_flip,
-               coordsys_face_kind, coordsys_face_edges);
+               coordsys_face_kind, coordsys_face_edges,
+               loft_start_cond, loft_end_cond);
     }
     template<class Archive>
     void load(Archive& ar) {
