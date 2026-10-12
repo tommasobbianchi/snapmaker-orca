@@ -8873,3 +8873,226 @@ TEST_CASE("An offset datum plane resolves at its offset, one row per datum", "[C
     CHECK(datums[0].second.origin.z() == Catch::Approx(doc.modeling_origin.z() + 20.).margin(1e-9));
     CHECK(datums[1].second.origin.z() == Catch::Approx(doc.modeling_origin.z() + 25.).margin(1e-9));
 }
+
+// Item 7 (Use / Project a sketch onto another plane).
+namespace {
+SketchEntity use_line(Vec2d a, Vec2d b)
+{
+    SketchEntity e; e.type = SketchEntity::Type::Line; e.p0 = a; e.p1 = b; return e;
+}
+}
+
+TEST_CASE("Use projects a sketch onto a parallel datum plane with identical (u,v), follows edits, refuses orphaning",
+          "[CadDocument][use]")
+{
+    CadDocument doc;
+    const SketchPlane xy = SketchPlane::XY();
+    const int a = doc.add_sketch_entities({use_line({0, 0}, {20, 0}), use_line({20, 0}, {20, 10}),
+                                           use_line({20, 10}, {0, 10}), use_line({0, 10}, {0, 0})},
+                                          xy, "A");
+    doc.add_plane(0, 20., 0., 0, "P");
+    REQUIRE(doc.recompute());
+    const auto datums = doc.resolve_datum_planes();
+    REQUIRE(datums.size() == 1);
+    const SketchPlane z20 = datums[0].second;
+
+    const int u = doc.add_use_sketch(a, {}, z20, "Use A");
+    REQUIRE(doc.recompute());
+    REQUIRE(doc.features[u].entities.size() == 4);
+    // The model origin offsets the XY plane, so compare in each plane's own (u,v): identical.
+    for (int i = 0; i < 4; ++i) {
+        // a.plane origin may be the modeling origin; both frames share axes, so uv of the world point
+        // in the destination equals the source uv shifted by the origin difference.
+        const Vec3d shift = doc.features[a].plane.origin - z20.origin;
+        const Vec2d d(shift.dot(z20.x_axis), shift.dot(z20.y_axis));
+        CHECK((doc.features[u].entities[i].p0 - (doc.features[a].entities[i].p0 + d)).norm() < 1e-9);
+        CHECK((doc.features[u].entities[i].p1 - (doc.features[a].entities[i].p1 + d)).norm() < 1e-9);
+    }
+
+    // Edit the parent: the child follows on the next recompute.
+    const Vec2d before = doc.features[u].entities[0].p1;
+    doc.features[a].entities[0].p1 = {35, 0};
+    REQUIRE(doc.recompute());
+    CHECK((doc.features[u].entities[0].p1 - before).norm() > 14.9);
+
+    // Deleting the parent is refused with a reason; nothing is silently emptied or kept stale.
+    const size_t n = doc.features.size();
+    CHECK_FALSE(doc.remove_feature(a));
+    CHECK_FALSE(doc.error.empty());
+    CHECK(doc.features.size() == n);
+    CHECK(doc.features[u].entities.size() == 4);
+
+    // A recipe that already lost its parent (hand-edited / old undo state) is an Error, not geometry.
+    doc.features[u].project_source_sketch = -1;
+    CHECK_FALSE(doc.recompute());
+    CHECK_FALSE(doc.error.empty());
+}
+
+TEST_CASE("Use link survives the recipe round trip", "[CadDocument][use]")
+{
+    CadDocument doc;
+    const int a = doc.add_sketch_entities({use_line({0, 0}, {5, 0}), use_line({5, 0}, {5, 5})},
+                                          SketchPlane::XY(), "A");
+    const int u = doc.add_use_sketch(a, {0}, SketchPlane::XZ(), "Use A");   // entity 1 would collapse onto XZ
+    REQUIRE(doc.recompute());
+    CadDocument back;
+    REQUIRE(back.deserialize_recipe(doc.serialize_recipe()));
+    REQUIRE(back.features.size() == 2);
+    CHECK(back.features[u].project_from_sketch);
+    CHECK(back.features[u].project_source_sketch == a);
+    REQUIRE(back.features[u].project_sketch_entities.size() == 1);
+    CHECK(back.features[u].project_sketch_entities[0] == 0);
+}
+
+// Item 9 (combine modes on Extrude / Revolve / Sweep / Loft).
+namespace {
+int combine_rect(CadDocument& doc, double x0, double y0, double x1, double y1, double z, const char* name)
+{
+    SketchPlane p = SketchPlane::XY();
+    p.origin = {0, 0, z};
+    return doc.add_sketch_entities({use_line({x0, y0}, {x1, y0}), use_line({x1, y0}, {x1, y1}),
+                                    use_line({x1, y1}, {x0, y1}), use_line({x0, y1}, {x0, y0})},
+                                   p, name);
+}
+double vol(const CadDocument& doc, int body) { return doc.body_mass_properties(body).volume; }
+
+enum class Tool { Extrude, Revolve, Loft, Sweep };
+// Adds the tool feature in `mode` over a 20x20x10 base box; returns false if recompute failed.
+bool add_combine_tool(CadDocument& doc, Tool t, BooleanMode mode)
+{
+    switch (t) {
+    case Tool::Extrude: {
+        const int s = combine_rect(doc, -5, -5, 5, 5, 0, "T");
+        doc.add_extrude(s, 10.0, false, mode, "ExT");
+        break;
+    }
+    case Tool::Revolve: {
+        const int s = combine_rect(doc, -2, 0, 2, 5, 0, "T");   // x -2..2, y 0..5, about the X axis
+        doc.add_revolve(s, 360.0, 0, false, mode, "RvT");
+        break;
+    }
+    case Tool::Loft: {
+        const int a = combine_rect(doc, -5, -5, 5, 5, 0, "L0");
+        const int b = combine_rect(doc, -5, -5, 5, 5, 10, "L1");
+        doc.add_loft({a, b}, true, mode, "LfT");
+        break;
+    }
+    case Tool::Sweep: {
+        const int prof = combine_rect(doc, -5, -5, 5, 5, 0, "P");
+        const int path = doc.add_sketch_entities({use_line({0, 0}, {0, 10})}, SketchPlane::XZ(), "Path");
+        doc.add_sweep(prof, path, mode, "SwT");
+        break;
+    }
+    }
+    return doc.recompute();
+}
+}
+
+TEST_CASE("Every combine mode gives the Onshape volume on Extrude, Revolve, Sweep and Loft", "[CadDocument][combine]")
+{
+    struct Case { Tool t; const char* name; double tool_vol; double overlap; };
+    const double half_cyl = 3.14159265358979 * 25.0 * 4.0 / 2.0;
+    const Case cases[] = {
+        {Tool::Extrude, "extrude", 1000.0, 1000.0},
+        {Tool::Revolve, "revolve", 2.0 * half_cyl, half_cyl},     // axis on the base's bottom face: half sticks out
+        {Tool::Loft,    "loft",    1000.0, 1000.0},
+        {Tool::Sweep,   "sweep",   1000.0, 1000.0},
+    };
+    for (const Case& c : cases) {
+        INFO(c.name);
+        auto fresh = [&](BooleanMode m) {
+            CadDocument doc;
+            const int base = combine_rect(doc, -10, -10, 10, 10, 0, "Base");
+            doc.add_extrude(base, 10.0, false, BooleanMode::New, "Box");
+            REQUIRE(doc.recompute());
+            REQUIRE(add_combine_tool(doc, c.t, m));
+            return doc;
+        };
+        {   // New body: two coexisting solids
+            CadDocument doc = fresh(BooleanMode::New);
+            REQUIRE(doc.bodies.size() == 2);
+            CHECK(vol(doc, 0) == Catch::Approx(4000.0).epsilon(1e-6));
+            CHECK(vol(doc, 1) == Catch::Approx(c.tool_vol).epsilon(1e-4));
+        }
+        {   // Join
+            CadDocument doc = fresh(BooleanMode::Add);
+            REQUIRE(doc.bodies.size() == 1);
+            CHECK(vol(doc, 0) == Catch::Approx(4000.0 + (c.tool_vol - c.overlap)).epsilon(1e-4));
+            CHECK(doc.feature_warnings.empty());
+        }
+        {   // Cut
+            CadDocument doc = fresh(BooleanMode::Cut);
+            REQUIRE(doc.bodies.size() == 1);
+            CHECK(vol(doc, 0) == Catch::Approx(4000.0 - c.overlap).epsilon(1e-4));
+        }
+        {   // Intersect
+            CadDocument doc = fresh(BooleanMode::Intersect);
+            REQUIRE(doc.bodies.size() == 1);
+            CHECK(vol(doc, 0) == Catch::Approx(c.overlap).epsilon(1e-4));
+        }
+    }
+}
+
+TEST_CASE("A combine that cannot be honoured keeps the shape as a new body and says so", "[CadDocument][combine]")
+{
+    auto base_doc = [] {
+        CadDocument doc;
+        const int base = combine_rect(doc, -10, -10, 10, 10, 0, "Base");
+        doc.add_extrude(base, 10.0, false, BooleanMode::New, "Box");
+        REQUIRE(doc.recompute());
+        return doc;
+    };
+    SECTION("Join that does not touch") {
+        CadDocument doc = base_doc();
+        const int s = combine_rect(doc, 30, 30, 40, 40, 0, "Far");
+        doc.add_extrude(s, 10.0, false, BooleanMode::Add, "Join");
+        REQUIRE(doc.recompute());
+        REQUIRE(doc.bodies.size() == 2);                 // the shape survives as its own body
+        CHECK(vol(doc, 0) == Catch::Approx(4000.0).epsilon(1e-6));
+        CHECK(vol(doc, 1) == Catch::Approx(1000.0).epsilon(1e-6));
+        REQUIRE(doc.feature_warnings.size() == 1);
+        CHECK(doc.feature_warnings[0].first == int(doc.features.size()) - 1);
+        CHECK_FALSE(doc.feature_warnings[0].second.empty());
+    }
+    SECTION("Intersect with no overlap") {
+        CadDocument doc = base_doc();
+        const int s = combine_rect(doc, 30, 30, 40, 40, 0, "Far");
+        doc.add_extrude(s, 10.0, false, BooleanMode::Intersect, "Int");
+        REQUIRE(doc.recompute());
+        REQUIRE(doc.bodies.size() == 2);
+        CHECK(doc.feature_warnings.size() == 1);
+    }
+    SECTION("Cut that would remove the whole body") {
+        CadDocument doc = base_doc();
+        const int s = combine_rect(doc, -20, -20, 20, 20, 0, "Big");
+        doc.add_extrude(s, 10.0, false, BooleanMode::Cut, "Cut");
+        REQUIRE(doc.recompute());
+        REQUIRE(doc.bodies.size() == 2);
+        CHECK(doc.feature_warnings.size() == 1);
+    }
+    SECTION("A cut that misses stays an Error (unchanged rule)") {
+        CadDocument doc = base_doc();
+        const int s = combine_rect(doc, 30, 30, 40, 40, 0, "Far");
+        doc.add_extrude(s, 10.0, false, BooleanMode::Cut, "Miss");
+        CHECK_FALSE(doc.recompute());
+        CHECK_FALSE(doc.error.empty());
+    }
+}
+
+TEST_CASE("Ctrl multi-profile: one extrude per picked loop, same mode, all of them built", "[CadDocument][combine]")
+{
+    // The kernel refuses disjoint regions in ONE extrude (tests above); the panel therefore makes one
+    // feature per picked region. Two squares, two features: two solids, the total volume of both.
+    CadDocument doc;
+    for (double x0 : {0.0, 30.0}) {
+        const double x1 = x0 + 10.0;
+        doc.add_extrude_entities({use_line({x0, 0}, {x1, 0}), use_line({x1, 0}, {x1, 10}),
+                                  use_line({x1, 10}, {x0, 10}), use_line({x0, 10}, {x0, 0})},
+                                 SketchPlane::XY(), 5.0, false, BooleanMode::New, "Loop");
+    }
+    const bool ok = doc.recompute();
+    INFO(doc.error);
+    REQUIRE(ok);
+    REQUIRE(doc.bodies.size() == 2);
+    CHECK(vol(doc, 0) + vol(doc, 1) == Catch::Approx(2.0 * 10.0 * 10.0 * 5.0).epsilon(1e-6));
+}

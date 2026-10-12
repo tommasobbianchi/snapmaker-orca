@@ -2193,6 +2193,57 @@ TopoDS_Face CadDocument::build_sketch_face(const CadFeature& sketch) const
     return BRepBuilderAPI_MakeFace(build_sketch_wire(sketch, true)).Face();
 }
 
+// A combine that could not do what its mode asks (Join that does not touch, Cut that eats the whole
+// body, Intersect with no overlap, an OCCT failure). Carries the TOOL so route_feature can keep the
+// user's shape as a NEW body and say so, instead of throwing their work away.
+struct CombineFailed : std::runtime_error {
+    TopoDS_Shape tool;
+    CombineFailed(const std::string& m, const TopoDS_Shape& t) : std::runtime_error(m), tool(t) {}
+};
+
+static int solid_count(const TopoDS_Shape& s)
+{
+    int n = 0;
+    if (s.IsNull()) return 0;
+    for (TopExp_Explorer ex(s, TopAbs_SOLID); ex.More(); ex.Next()) ++n;
+    return n;
+}
+
+// The one place Extrude / Revolve / Sweep / Loft combine their tool with the body (Onshape's New /
+// Add / Remove / Intersect). Four copies of this used to drift independently.
+static void combine_into(BooleanMode mode, TopoDS_Shape& result, bool& have_body, const TopoDS_Shape& tool)
+{
+    if (!have_body || mode == BooleanMode::New) {
+        result = tool;
+        have_body = true;
+        return;
+    }
+    if (mode == BooleanMode::Add) {
+        BRepAlgoAPI_Fuse fuse(result, tool);
+        if (!fuse.IsDone() || fuse.Shape().IsNull())
+            throw CombineFailed(_u8L("Join failed"), tool);
+        // Disjoint solids fuse into one compound that still has both: that is not a join.
+        const int nb = solid_count(result), nt = solid_count(tool), nf = solid_count(fuse.Shape());
+        if (nb >= 1 && nt >= 1 && nf >= nb + nt)
+            throw CombineFailed(_u8L("the new shape does not touch the body, so it cannot be joined"), tool);
+        result = fuse.Shape();
+    } else if (mode == BooleanMode::Cut) {
+        BRepAlgoAPI_Cut cut(result, tool);
+        if (!cut.IsDone() || cut.Shape().IsNull())
+            throw CombineFailed(_u8L("Cut failed"), tool);
+        if (solid_count(cut.Shape()) == 0)
+            throw CombineFailed(_u8L("the cut would remove the whole body"), tool);
+        result = cut.Shape();
+    } else if (mode == BooleanMode::Intersect) {
+        BRepAlgoAPI_Common common(result, tool);
+        if (!common.IsDone() || common.Shape().IsNull())
+            throw CombineFailed(_u8L("Intersect failed"), tool);
+        if (solid_count(common.Shape()) == 0)
+            throw CombineFailed(_u8L("the shapes do not overlap, so there is nothing to intersect"), tool);
+        result = common.Shape();
+    }
+}
+
 void CadDocument::apply_feature(TopoDS_Shape& result, bool& have_body,
                                 const TopoDS_Shape& context, const CadFeature& f) const
 {
@@ -2297,22 +2348,7 @@ void CadDocument::apply_feature(TopoDS_Shape& result, bool& have_body,
         // New / first-of-a-body => result becomes the tool (route_feature sends New extrudes
         // here with an empty result, so a face-extrude New builds a fresh body from the source
         // face in `context` without touching it). Add/Cut/Intersect boolean into `result`.
-        if (!have_body || f.mode == BooleanMode::New) {
-            result = tool;
-            have_body = true;
-        } else if (f.mode == BooleanMode::Add) {
-            BRepAlgoAPI_Fuse fuse(result, tool);
-            if (!fuse.IsDone()) throw std::runtime_error("fuse failed");
-            result = fuse.Shape();
-        } else if (f.mode == BooleanMode::Cut) {
-            BRepAlgoAPI_Cut cut(result, tool);
-            if (!cut.IsDone()) throw std::runtime_error("cut failed");
-            result = cut.Shape();
-        } else if (f.mode == BooleanMode::Intersect) {
-            BRepAlgoAPI_Common common(result, tool);
-            if (!common.IsDone()) throw std::runtime_error("intersect failed");
-            result = common.Shape();
-        }
+        combine_into(f.mode, result, have_body, tool);
         break;
     }
     case CadFeatureType::Revolve: {
@@ -2325,22 +2361,7 @@ void CadDocument::apply_feature(TopoDS_Shape& result, bool& have_body,
         TopoDS_Wire wire = build_sketch_wire(sk, true);
         const double ang = f.flip ? -f.revolve_angle : f.revolve_angle;
         TopoDS_Shape tool = SketchEngine::make_revolve(wire, sk.plane, ang, f.revolve_axis);
-        if (!have_body || f.mode == BooleanMode::New) {
-            result = tool;
-            have_body = true;
-        } else if (f.mode == BooleanMode::Add) {
-            BRepAlgoAPI_Fuse fuse(result, tool);
-            if (!fuse.IsDone()) throw std::runtime_error("fuse failed");
-            result = fuse.Shape();
-        } else if (f.mode == BooleanMode::Cut) {
-            BRepAlgoAPI_Cut cut(result, tool);
-            if (!cut.IsDone()) throw std::runtime_error("cut failed");
-            result = cut.Shape();
-        } else if (f.mode == BooleanMode::Intersect) {
-            BRepAlgoAPI_Common common(result, tool);
-            if (!common.IsDone()) throw std::runtime_error("intersect failed");
-            result = common.Shape();
-        }
+        combine_into(f.mode, result, have_body, tool);
         break;
     }
     case CadFeatureType::SurfaceExtrude: {
@@ -2434,22 +2455,7 @@ void CadDocument::apply_feature(TopoDS_Shape& result, bool& have_body,
         }
         TopoDS_Wire profile = build_sketch_wire(sk, true);
         TopoDS_Shape tool   = SketchEngine::make_sweep(profile, path);
-        if (!have_body || f.mode == BooleanMode::New) {
-            result = tool;
-            have_body = true;
-        } else if (f.mode == BooleanMode::Add) {
-            BRepAlgoAPI_Fuse fuse(result, tool);
-            if (!fuse.IsDone()) throw std::runtime_error("fuse failed");
-            result = fuse.Shape();
-        } else if (f.mode == BooleanMode::Cut) {
-            BRepAlgoAPI_Cut cut(result, tool);
-            if (!cut.IsDone()) throw std::runtime_error("cut failed");
-            result = cut.Shape();
-        } else if (f.mode == BooleanMode::Intersect) {
-            BRepAlgoAPI_Common common(result, tool);
-            if (!common.IsDone()) throw std::runtime_error("intersect failed");
-            result = common.Shape();
-        }
+        combine_into(f.mode, result, have_body, tool);
         break;
     }
     case CadFeatureType::Loft: {
@@ -2466,22 +2472,7 @@ void CadDocument::apply_feature(TopoDS_Shape& result, bool& have_body,
         if (profiles.size() < 2)
             throw std::runtime_error("loft needs 2+ valid profile sketches");
         TopoDS_Shape tool = SketchEngine::make_loft(profiles, f.loft_ruled);
-        if (!have_body || f.mode == BooleanMode::New) {
-            result = tool;
-            have_body = true;
-        } else if (f.mode == BooleanMode::Add) {
-            BRepAlgoAPI_Fuse fuse(result, tool);
-            if (!fuse.IsDone()) throw std::runtime_error("fuse failed");
-            result = fuse.Shape();
-        } else if (f.mode == BooleanMode::Cut) {
-            BRepAlgoAPI_Cut cut(result, tool);
-            if (!cut.IsDone()) throw std::runtime_error("cut failed");
-            result = cut.Shape();
-        } else if (f.mode == BooleanMode::Intersect) {
-            BRepAlgoAPI_Common common(result, tool);
-            if (!common.IsDone()) throw std::runtime_error("intersect failed");
-            result = common.Shape();
-        }
+        combine_into(f.mode, result, have_body, tool);
         break;
     }
     case CadFeatureType::Pattern: {
@@ -3598,7 +3589,15 @@ void CadDocument::route_feature(std::vector<CadBody>& bodies, const CadFeature& 
                                || f.type == CadFeatureType::Sweep  || f.type == CadFeatureType::Loft)
                               && f.mode == BooleanMode::Cut);
         const double before = removes ? solid_volume(result) : 0.0;
-        apply_feature(result, have_body, context, f);
+        try {
+            apply_feature(result, have_body, context, f);
+        } catch (const CombineFailed& cf) {
+            // The mode could not be honoured. Keep the user's shape as a NEW body, and say why:
+            // a failed combine must never silently lose the profile they just built.
+            bodies.push_back({ cf.tool, f.name.empty() ? _u8L("Body") : f.name });
+            m_pending_warnings.push_back(format(_u8L("%1% — made a new body instead"), cf.what()));
+            return;
+        }
         if (removes && before > 0.0) {
             const double after = solid_volume(result);
             // Relative tolerance: a cut that shaves a numerically invisible sliver is a miss too,
@@ -3617,6 +3616,7 @@ void CadDocument::route_feature(std::vector<CadBody>& bodies, const CadFeature& 
 bool CadDocument::recompute()
 {
     error.clear();
+    feature_warnings.clear();
     detect_mate_conflicts();
     std::vector<CadBody> built;
     // Did any feature in this document even ASK for a solid? A document made only of sketches
@@ -3644,8 +3644,11 @@ bool CadDocument::recompute()
             if (f.type == CadFeatureType::CoordSys) continue; // datum coordinate system
             // Past the skips: this feature is one that means to leave a body behind.
             any_solid_feature = true;
+            m_pending_warnings.clear();
             if (f.type == CadFeatureType::Project) { apply_project(built, f); }
             else                                   { route_feature(built, f); }
+            for (const std::string& w : m_pending_warnings) feature_warnings.emplace_back(int(fi), w);
+            m_pending_warnings.clear();
             // Record which feature made each body. "Still unset?" is the whole rule, and it is
             // sufficient because of an invariant worth stating: NO feature ever replaces a whole
             // CadBody. Every in-place op writes only `.shape` (boolean, cut, mirror-fuse,

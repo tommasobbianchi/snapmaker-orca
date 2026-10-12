@@ -4533,8 +4533,17 @@ void DesignPanel::on_shape_changed()
 
 void DesignPanel::set_status_ok()
 {
-    set_status(wxString::Format(_L("OK — %zu triangles"),
-                                        m_doc.display_mesh.its.indices.size()));
+    if (!m_doc.feature_warnings.empty()) {
+        // A combine mode that could not be honoured fell back to a new body (Extrude / Revolve /
+        // Sweep / Loft): the model is fine, but the user must hear why it is not what they chose.
+        const auto& w = m_doc.feature_warnings.back();
+        const std::string fname = (w.first >= 0 && w.first < int(m_doc.features.size()))
+                                      ? m_doc.features[w.first].name : std::string();
+        set_status(StatusKind::Warning, wxString::FromUTF8(fname) + ": " + wxString::FromUTF8(w.second));
+    } else {
+        set_status(wxString::Format(_L("OK — %zu triangles"),
+                                    m_doc.display_mesh.its.indices.size()));
+    }
     if (m_viewport != nullptr) {
         m_viewport->clear_move_gizmo();   // a recompute invalidates the gizmo's body centroid
         rebuild_disp_meshes();            // apply per-body Move transforms to the display/pick meshes
@@ -5079,6 +5088,7 @@ void DesignPanel::on_add_extrude()
     BooleanMode mode = static_cast<BooleanMode>(m_mode->GetSelection());  // New/Add/Cut/Intersect
     m_feature_counter++;
     const std::string name = "Extrude" + std::to_string(m_feature_counter);
+    const int n_before = int(m_doc.features.size());
     int idx = -1;
     if (m_extrude_face_src >= 0) {
         // Onshape face-extrude: the picked solid face is the profile (no sketch wire).
@@ -5091,9 +5101,17 @@ void DesignPanel::on_add_extrude()
             std::fprintf(stderr, "[pick] on_add_extrude: feat=%d reg=%d ents=%zu\n",
                          m_extrude_sketch_ref, m_sel_sketch_region,
                          m_viewport->selected_loop_entities().size());
-        idx = m_doc.add_extrude_entities(m_viewport->selected_loop_entities(),
-                                         m_doc.features[m_extrude_sketch_ref].plane,
-                                         m_distance->GetValue(), false, mode, name);
+        // Ctrl multi-profile: the kernel refuses disjoint regions in ONE extrude (on purpose), so each
+        // picked region becomes its own feature with the same mode and depth. idx ends on the last,
+        // so the end-condition fields below land on it; the earlier ones keep the blind defaults.
+        std::vector<std::vector<SketchEntity>> groups = m_viewport->selected_loop_groups();
+        if (groups.empty()) groups.push_back(m_viewport->selected_loop_entities());
+        for (size_t gi = 0; gi < groups.size(); ++gi) {
+            if (gi > 0) m_feature_counter++;
+            const std::string gname = gi == 0 ? name : "Extrude" + std::to_string(m_feature_counter);
+            idx = m_doc.add_extrude_entities(groups[gi], m_doc.features[m_extrude_sketch_ref].plane,
+                                             m_distance->GetValue(), false, mode, gname);
+        }
         m_sel_sketch_region = -1;        // consume the loop selection
         m_viewport->clear_loop_pick();   // drop the now-stale loop highlight
     } else {
@@ -5101,8 +5119,8 @@ void DesignPanel::on_add_extrude()
     }
     // Carry the Onshape end-condition / taper / flip / up-to-face onto the new feature so the
     // committed solid matches the preview (build_candidate sets the same fields).
-    if (idx >= 0 && idx < int(m_doc.features.size())) {
-        CadFeature& f = m_doc.features[idx];
+    for (int fi = std::max(n_before, 0); idx >= 0 && fi <= idx && fi < int(m_doc.features.size()); ++fi) {
+        CadFeature& f = m_doc.features[fi];
         f.extrude_end = static_cast<ExtrudeEnd>(m_extrude_end->GetSelection());
         f.distance2   = m_distance2->GetValue();
         f.taper_deg   = m_taper->GetValue();
