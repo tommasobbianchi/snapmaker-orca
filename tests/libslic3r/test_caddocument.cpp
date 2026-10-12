@@ -1,15 +1,9 @@
 #include <catch2/catch.hpp>
-#include <catch2/catch_message.hpp>
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_approx.hpp>
-#include <catch2/matchers/catch_matchers.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <Standard_TypeDef.hxx>
 #include <algorithm>
 #include <TopAbs_ShapeEnum.hxx>
 #include <GeomAbs_CurveType.hxx>
 #include <GeomAbs_SurfaceType.hxx>
-#include <catch2/catch_all.hpp>   // mainline OrcaSlicer ships Catch2 v3 (v2 was catch2/catch.hpp)
 #include <cereal/details/helpers.hpp>
 #include <cereal/cereal.hpp>
 #include <map>
@@ -2304,7 +2298,6 @@ TEST_CASE("a truncated feature keeps what it could read", "[CadDocument][recipe]
     // Shorten feature 1 by dropping its final field (4 bytes): rewrite its length prefix
     // and erase the tail bytes. The reader then runs out inside fa(f), throws, and keeps
     // everything it had already assigned — that is the whole point of the try/catch.
-    const size_t drop = sizeof(uint32_t);
     // Shorten feature 1 so it ends right after coordsys_face_kind: drop coordsys_face_edges
     // (4 bytes), the two flags appended after it (thread_major_nominal, pattern_inclusive:
     // 1 byte each), the empty dressup_edges list and the two empty text strings (an 8-byte size
@@ -2312,13 +2305,13 @@ TEST_CASE("a truncated feature keeps what it could read", "[CadDocument][recipe]
     // The reader then runs out inside fa(f), throws, and keeps everything it had already
     // assigned — that is the whole point of the try/catch. (Cut on a field boundary: a field
     // cut in half is read as whatever half arrived.)
-    // + the Use link appended after revolve_axis_entity: project_from_sketch (bool),
-    // project_source_sketch (int) and the empty project_sketch_entities list (a size tag).
-    // + the loft end conditions (two ints) appended after the Use link.
+    // coordsys_face_edges (an int) is the cut; everything after it is dropped with it: the wire-order
+    // placeholders thread_major_nominal + pattern_inclusive (2 bool), dressup_edges + text_string +
+    // text_font (3 size tags), text_height (double), revolve_axis_entity (int), the Use link
+    // project_from_sketch (bool) + project_source_sketch (int) + project_sketch_entities (size tag),
+    // and the loft end conditions (2 int).
     const size_t drop = sizeof(uint32_t) + 3 * sizeof(bool) + 4 * sizeof(cereal::size_type) + sizeof(double)
                         + 4 * sizeof(int);
-    const size_t drop = sizeof(uint32_t) + 3 * sizeof(bool) + 4 * sizeof(cereal::size_type) + sizeof(double)
-                        + 2 * sizeof(int);
     REQUIRE(f_len[1] > drop);
     std::string shortened = blob;
     shortened.erase(f_off[1] + 4 + f_len[1] - drop, drop);
