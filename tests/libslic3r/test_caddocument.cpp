@@ -1,4 +1,30 @@
 #include <catch2/catch.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <Standard_TypeDef.hxx>
+#include <algorithm>
+#include <TopAbs_ShapeEnum.hxx>
+#include <GeomAbs_CurveType.hxx>
+#include <GeomAbs_SurfaceType.hxx>
+#include <catch2/catch_all.hpp>   // mainline OrcaSlicer ships Catch2 v3 (v2 was catch2/catch.hpp)
+#include <cereal/details/helpers.hpp>
+#include <cereal/cereal.hpp>
+#include <map>
+#include <vector>
+#include <math.h>
+#include <utility>
+#include <sstream>
+#include <cstdint>
+#include <ios>
+#include <iterator>
+#include "libslic3r/TriangleMesh.hpp"
+#include <exception>
+#include <chrono>
+#include <cstdio>
+#include <string>
 
 // Substring assertions, spelled so this file compiles UNCHANGED on both forks.
 // Catch2 v2 (snaporca) spells it Matchers::Contains; v3 (orca_cad / mainline) spells it
@@ -9218,4 +9244,39 @@ TEST_CASE("Loft end condition Normal-to-profile makes the skin leave and arrive 
     const double one = make(1, 0);
     CHECK(one < frustum * 0.999);
     CHECK(one > 0.5 * frustum);
+}
+
+// Item 13 (interactive LOD): measurement, not an assertion on speed. Hidden by default; run with
+// "[.perf]" to print the numbers that go into the commit message / bd.
+TEST_CASE("Preview tessellation cost at the committed vs the interactive deflection", "[.perf][CadDocument]")
+{
+    CadDocument doc;
+    const int base = combine_rect(doc, -50, -50, 50, 50, 0, "Base");
+    doc.add_extrude(base, 20.0, false, BooleanMode::New, "Plate");
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j) {
+            SketchPlane top = SketchPlane::XY();
+            top.origin = {0, 0, 20};
+            doc.add_hole(6.0, 20.0, true, -30.0 + 20.0 * i, -30.0 + 20.0 * j, top, "H");
+        }
+    REQUIRE(doc.recompute());
+    // A second body that the candidate extrude will join to, as in a real edit session.
+    const int s2 = combine_rect(doc, -10, -10, 10, 10, 20, "Boss");
+    CadFeature cand;
+    cand.type = CadFeatureType::Extrude;
+    cand.sketch_ref = s2;
+    cand.distance = 15.0;
+    cand.mode = BooleanMode::Add;
+    using clock = std::chrono::steady_clock;
+    for (double lin : {0.003, 0.01, 0.05, 0.2}) {
+        doc.linear_deflection = lin;
+        TriangleMesh m;
+        std::vector<TriangleMesh> per;
+        std::string err;
+        const auto t0 = clock::now();
+        const bool ok = doc.preview(cand, m, per, err);
+        const double ms = std::chrono::duration<double, std::milli>(clock::now() - t0).count();
+        std::printf("[perf] preview linear_deflection=%.3f ok=%d tris=%zu time=%.1f ms\n",
+                    lin, int(ok), m.its.indices.size(), ms);
+    }
 }
