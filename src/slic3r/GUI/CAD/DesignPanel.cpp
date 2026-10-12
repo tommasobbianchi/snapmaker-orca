@@ -10529,9 +10529,16 @@ void DesignPanel::update_reference_planes()
     // Not simply always-on: m_dbp_active both RENDERS and picks, so three translucent planes
     // would otherwise float over every finished model. Tying them to Sketch mode shows them
     // exactly when they are the thing being chosen, and hides them again on Finish.
-    if (m_doc.bodies.empty() || m_ui_mode == UiMode::Sketch)
+    if (m_doc.bodies.empty() || m_ui_mode == UiMode::Sketch) {
+        // Datum planes are sketch planes too (RF47: loft between profiles on parallel planes). Row
+        // 3+i is what ref_plane_name / plane_from_choice read back, so a pick lands on the same
+        // datum the Plane card's base combo would name.
+        const auto datums = m_doc.resolve_datum_planes();
+        for (int i = 0; i < int(datums.size()); ++i) {
+            bp.push_back(datums[i].second); bi.push_back(3 + i); bl.push_back(datums[i].first);
+        }
         m_viewport->set_base_pick(std::move(bp), std::move(bi), std::move(bl));
-    else
+    } else
         m_viewport->clear_base_pick();
 }
 
