@@ -8888,8 +8888,8 @@ TEST_CASE("A sketch plane's uv survives a ray round trip on arbitrary frames", "
         const Slic3r::Vec3d hit = p.to_world(uv);
         const Slic3r::Vec3d eye = hit + n * (50. + 10. * std::abs(rnd()));   // in front of the plane
         const Slic3r::Vec2d back = p.project(eye, (hit - eye).normalized());
-        CHECK(back.x() == Catch::Approx(uv.x()).margin(1e-9));
-        CHECK(back.y() == Catch::Approx(uv.y()).margin(1e-9));
+        CHECK(back.x() == Approx(uv.x()).margin(1e-9));
+        CHECK(back.y() == Approx(uv.y()).margin(1e-9));
     }
 }
 
@@ -8903,8 +8903,8 @@ TEST_CASE("An offset datum plane resolves at its offset, one row per datum", "[C
     doc.recompute();
     const auto datums = doc.resolve_datum_planes();
     REQUIRE(datums.size() == 2);
-    CHECK(datums[0].second.origin.z() == Catch::Approx(doc.modeling_origin.z() + 20.).margin(1e-9));
-    CHECK(datums[1].second.origin.z() == Catch::Approx(doc.modeling_origin.z() + 25.).margin(1e-9));
+    CHECK(datums[0].second.origin.z() == Approx(doc.modeling_origin.z() + 20.).margin(1e-9));
+    CHECK(datums[1].second.origin.z() == Approx(doc.modeling_origin.z() + 25.).margin(1e-9));
 }
 
 // Item 7 (Use / Project a sketch onto another plane).
@@ -9044,24 +9044,24 @@ TEST_CASE("Every combine mode gives the Onshape volume on Extrude, Revolve, Swee
         {   // New body: two coexisting solids
             CadDocument doc = fresh(BooleanMode::New);
             REQUIRE(doc.bodies.size() == 2);
-            CHECK(vol(doc, 0) == Catch::Approx(4000.0).epsilon(1e-6));
-            CHECK(vol(doc, 1) == Catch::Approx(c.tool_vol).epsilon(1e-4));
+            CHECK(vol(doc, 0) == Approx(4000.0).epsilon(1e-6));
+            CHECK(vol(doc, 1) == Approx(c.tool_vol).epsilon(1e-4));
         }
         {   // Join
             CadDocument doc = fresh(BooleanMode::Add);
             REQUIRE(doc.bodies.size() == 1);
-            CHECK(vol(doc, 0) == Catch::Approx(4000.0 + (c.tool_vol - c.overlap)).epsilon(1e-4));
+            CHECK(vol(doc, 0) == Approx(4000.0 + (c.tool_vol - c.overlap)).epsilon(1e-4));
             CHECK(doc.feature_warnings.empty());
         }
         {   // Cut
             CadDocument doc = fresh(BooleanMode::Cut);
             REQUIRE(doc.bodies.size() == 1);
-            CHECK(vol(doc, 0) == Catch::Approx(4000.0 - c.overlap).epsilon(1e-4));
+            CHECK(vol(doc, 0) == Approx(4000.0 - c.overlap).epsilon(1e-4));
         }
         {   // Intersect
             CadDocument doc = fresh(BooleanMode::Intersect);
             REQUIRE(doc.bodies.size() == 1);
-            CHECK(vol(doc, 0) == Catch::Approx(c.overlap).epsilon(1e-4));
+            CHECK(vol(doc, 0) == Approx(c.overlap).epsilon(1e-4));
         }
     }
 }
@@ -9081,8 +9081,8 @@ TEST_CASE("A combine that cannot be honoured keeps the shape as a new body and s
         doc.add_extrude(s, 10.0, false, BooleanMode::Add, "Join");
         REQUIRE(doc.recompute());
         REQUIRE(doc.bodies.size() == 2);                 // the shape survives as its own body
-        CHECK(vol(doc, 0) == Catch::Approx(4000.0).epsilon(1e-6));
-        CHECK(vol(doc, 1) == Catch::Approx(1000.0).epsilon(1e-6));
+        CHECK(vol(doc, 0) == Approx(4000.0).epsilon(1e-6));
+        CHECK(vol(doc, 1) == Approx(1000.0).epsilon(1e-6));
         REQUIRE(doc.feature_warnings.size() == 1);
         CHECK(doc.feature_warnings[0].first == int(doc.features.size()) - 1);
         CHECK_FALSE(doc.feature_warnings[0].second.empty());
@@ -9127,7 +9127,7 @@ TEST_CASE("Ctrl multi-profile: one extrude per picked loop, same mode, all of th
     INFO(doc.error);
     REQUIRE(ok);
     REQUIRE(doc.bodies.size() == 2);
-    CHECK(vol(doc, 0) + vol(doc, 1) == Catch::Approx(2.0 * 10.0 * 10.0 * 5.0).epsilon(1e-6));
+    CHECK(vol(doc, 0) + vol(doc, 1) == Approx(2.0 * 10.0 * 10.0 * 5.0).epsilon(1e-6));
 }
 
 // Item 10 (push/pull of a planar face): the sign of the distance picks Join/Cut and the seams merge.
@@ -9154,7 +9154,7 @@ TEST_CASE("Push/pull of a planar face: out joins (V + A*d), in cuts (V - A*d), f
         doc.add_extrude_face(top, 5.0, false, BooleanMode::Add, "Pull");
         REQUIRE(doc.recompute());
         REQUIRE(doc.bodies.size() == 1);
-        CHECK(vol(doc, 0) == Catch::Approx(4000.0 + 400.0 * 5.0).epsilon(1e-6));
+        CHECK(vol(doc, 0) == Approx(4000.0 + 400.0 * 5.0).epsilon(1e-6));
         CHECK(GeometryEngine::face_count(doc.bodies[0].shape) == 6);   // not 10: side faces merged
     }
     SECTION("push in") {
@@ -9164,7 +9164,7 @@ TEST_CASE("Push/pull of a planar face: out joins (V + A*d), in cuts (V - A*d), f
         doc.add_extrude_face(top, -3.0, false, BooleanMode::Add, "Push");   // negative = into the body
         REQUIRE(doc.recompute());
         REQUIRE(doc.bodies.size() == 1);
-        CHECK(vol(doc, 0) == Catch::Approx(4000.0 - 400.0 * 3.0).epsilon(1e-6));
+        CHECK(vol(doc, 0) == Approx(4000.0 - 400.0 * 3.0).epsilon(1e-6));
         CHECK(GeometryEngine::face_count(doc.bodies[0].shape) == 6);
     }
     SECTION("a later fillet still resolves on the merged shape") {
@@ -9196,12 +9196,12 @@ TEST_CASE("A 3-profile loft across z=0/10/20 matches the analytic volume and doe
         REQUIRE(ok);
         REQUIRE(doc.bodies.size() == 1);
         const double frustum = (10.0 / 3.0) * (100.0 + 400.0 + std::sqrt(100.0 * 400.0));
-        CHECK(vol(doc, 0) == Catch::Approx(2.0 * frustum).epsilon(1e-3));
+        CHECK(vol(doc, 0) == Approx(2.0 * frustum).epsilon(1e-3));
         // No twist: the side walls stay inside the 20x20 envelope and span z 0..20.
         const auto bb = doc.display_mesh.bounding_box();
-        CHECK(bb.min.z() == Catch::Approx(0.0).margin(1e-6));
-        CHECK(bb.max.z() == Catch::Approx(20.0).margin(1e-6));
-        CHECK(bb.max.x() - bb.min.x() == Catch::Approx(20.0).margin(1e-3));
+        CHECK(bb.min.z() == Approx(0.0).margin(1e-6));
+        CHECK(bb.max.z() == Approx(20.0).margin(1e-6));
+        CHECK(bb.max.x() - bb.min.x() == Approx(20.0).margin(1e-3));
     }
     SECTION("smooth (not ruled) builds a valid solid through all three") {
         doc.add_loft({a, b, c}, false, BooleanMode::New, "Loft");
@@ -9230,7 +9230,7 @@ TEST_CASE("Loft end condition Normal-to-profile makes the skin leave and arrive 
         return doc.body_mass_properties(0).volume;
     };
     const double frustum = (10.0 / 3.0) * (100.0 + 400.0 + std::sqrt(100.0 * 400.0));
-    CHECK(make(0, 0) == Catch::Approx(frustum).epsilon(1e-3));            // Contact: straight walls
+    CHECK(make(0, 0) == Approx(frustum).epsilon(1e-3));            // Contact: straight walls
     const double both = make(1, 1);
     CHECK(both > frustum * 1.005);   // an S-shaped wall, hugging the verticals at both ends, holds more
     CHECK(both < frustum * 1.05);
