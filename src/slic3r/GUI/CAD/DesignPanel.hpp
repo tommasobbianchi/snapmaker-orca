@@ -476,6 +476,9 @@ private:
     // Owns the themed DropDown flyouts (and the item vectors they hold by ref).
     std::vector<std::shared_ptr<void>> m_flyout_keepalive;
     wxCheckBox*       m_construction{nullptr};   // sketch-mode construction toggle
+    wxCheckBox*       m_grid_snap{nullptr};      // sketch grid snap on/off (persisted)
+    wxSpinCtrlDouble* m_grid_step{nullptr};      // snap step, mm (persisted)
+    void              push_grid_snap();          // spin/check -> viewport + config
     wxSpinCtrlDouble* m_move_dx{nullptr};        // Move/Rotate card: world translation
     wxSpinCtrlDouble* m_move_dy{nullptr};
     wxSpinCtrlDouble* m_move_dz{nullptr};

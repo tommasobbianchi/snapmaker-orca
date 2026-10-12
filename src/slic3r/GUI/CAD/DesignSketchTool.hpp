@@ -125,6 +125,9 @@ public:
     void set_tool(Mode mode);                 // switch tool, keep accumulated entities
     void set_plane(const SketchPlane& plane) { m_plane = plane; }  // re-plane a live sketch (a reference plane was clicked mid-session); entities are 2D, re-lifted through the new plane
     void set_construction(bool c) { m_construction = c; }
+    // Grid snap: draw tools land on multiples of `step` (mm) in sketch (u,v). Inference snaps and
+    // Shift (the existing "no snapping" modifier) take priority over it.
+    void set_grid_snap(bool on, double step) { m_grid_on = on; m_grid_step = step; }
     void set_polygon_sides(int n) { m_polygon_sides = (n < 3 ? 3 : n); }
     void set_polygon_circumscribed(bool c) { m_polygon_circumscribed = c; }
     void finish();                            // emit accumulated entities, end session
@@ -958,6 +961,8 @@ private:
     Vec2d               m_cursor{0,0};
     bool                m_has_cursor{false};
     bool                m_snap_off{false};      // Shift held -> suppress angle snapping
+    bool                m_grid_on{false};
+    double              m_grid_step{1.0};
     InferenceSnap       m_cursor_snap;          // last cursor inference target (for hint render)
     bool                m_cursor_locked{false}; // rubber-band segment is angle-locked
     bool                m_awaiting_length{false}; // inline value editor open -> freeze canvas
