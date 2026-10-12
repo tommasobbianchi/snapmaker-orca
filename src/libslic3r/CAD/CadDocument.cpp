@@ -1259,6 +1259,20 @@ int CadDocument::add_project_edges(int source_body, const std::vector<int>& edge
     return int(features.size()) - 1;
 }
 
+int CadDocument::add_use_sketch(int source_sketch, const std::vector<int>& entities,
+                                const SketchPlane& plane, const std::string& name)
+{
+    CadFeature f;
+    f.type                  = CadFeatureType::Project;
+    f.name                  = name;
+    f.project_from_sketch   = true;
+    f.project_source_sketch = source_sketch;
+    f.project_sketch_entities = entities;
+    f.plane                 = plane;
+    features.push_back(f);
+    return int(features.size()) - 1;
+}
+
 int CadDocument::project_edges_into_sketch(int sketch_feature, int source_body,
                                            const std::vector<int>& edge_ids, int face)
 {
@@ -1980,6 +1994,7 @@ static void for_each_feature_ref(CadFeature& f, Visit&& visit)
     visit(f.sweep_path_ref);
     visit(f.pattern_curve_sketch);
     visit(f.rib_sketch_ref);
+    visit(f.project_source_sketch);
     visit(f.mate_cs_a);
     visit(f.mate_cs_b);
     for (int& r : f.loft_profile_refs)
@@ -1990,6 +2005,15 @@ bool CadDocument::remove_feature(int index)
 {
     if (index < 0 || index >= int(features.size()))
         return false;
+
+    // A sketch that a Use / Project feature reads cannot be deleted from under it: refused with the
+    // reason, rather than letting the dependent derive nothing (or keep stale geometry) in silence.
+    for (int j = 0; j < int(features.size()); ++j)
+        if (features[j].project_from_sketch && features[j].project_source_sketch == index) {
+            error = _u8L("This sketch is the source of ") + features[j].name
+                  + _u8L(" (Use). Delete that first.");
+            return false;
+        }
 
     std::vector<CadFeature> snapshot = features;
 
@@ -3247,8 +3271,78 @@ static void project_edges_to_entities(const std::vector<TopoDS_Edge>& edges,
     }
 }
 
-void CadDocument::apply_project(const std::vector<CadBody>& bodies, CadFeature& f) const
+// Orthogonal projection of another sketch's entities onto this feature's plane. Lines, points and
+// spline poles project exactly onto any plane; circles and arcs only onto a parallel one (they
+// would become ellipses), and ellipses are not carried yet. Anything it cannot carry is an Error,
+// never a quietly dropped entity.
+void CadDocument::apply_project_from_sketch(CadFeature& f, size_t fi) const
 {
+    f.entities.clear();
+    const int src = f.project_source_sketch;
+    if (src < 0 || src >= int(fi) || src >= int(features.size()))
+        throw std::runtime_error(_u8L("use: the source sketch is missing"));
+    const CadFeature& s = features[src];
+    if ((s.type != CadFeatureType::Sketch && s.type != CadFeatureType::Project) || !s.enabled)
+        throw std::runtime_error(_u8L("use: the source is not an enabled sketch"));
+    if (s.entities.empty())
+        throw std::runtime_error(_u8L("use: the source sketch has no entities"));
+
+    const SketchPlane& sp = s.plane;
+    const SketchPlane& dp = f.plane;
+    auto frame_normal = [](const SketchPlane& p) { return p.x_axis.cross(p.y_axis).normalized(); };
+    const double facing = frame_normal(sp).dot(frame_normal(dp));
+    const bool   parallel = std::abs(facing) > 1.0 - 1e-9;
+    auto to_dst = [&](const Vec2d& uv) {
+        const Vec3d w = sp.to_world(uv) - dp.origin;
+        return Vec2d(w.dot(dp.x_axis), w.dot(dp.y_axis));
+    };
+
+    std::vector<int> pick = f.project_sketch_entities;
+    if (pick.empty())
+        for (int i = 0; i < int(s.entities.size()); ++i) pick.push_back(i);
+    for (int idx : pick) {
+        if (idx < 0 || idx >= int(s.entities.size()))
+            throw std::runtime_error(_u8L("use: a source entity no longer exists"));
+        SketchEntity e = s.entities[idx];
+        switch (e.type) {
+        case SketchEntity::Type::Line:
+            e.p0 = to_dst(e.p0); e.p1 = to_dst(e.p1);
+            if ((e.p1 - e.p0).norm() < 1e-7) continue;   // perpendicular to the target: no geometry
+            break;
+        case SketchEntity::Type::Point:
+            e.p0 = to_dst(e.p0); break;
+        case SketchEntity::Type::BSpline:
+            for (Vec2d& c : e.ctrl) c = to_dst(c);
+            e.p0 = to_dst(e.p0); e.p1 = to_dst(e.p1);
+            break;
+        case SketchEntity::Type::Circle:
+        case SketchEntity::Type::Arc: {
+            if (!parallel)
+                throw std::runtime_error(_u8L("use: a circle or arc cannot be projected onto a plane that is not parallel to its sketch"));
+            const Vec2d c = to_dst(e.center);
+            if (e.type == SketchEntity::Type::Arc) {
+                Vec2d a = to_dst(e.p0), b = to_dst(e.p1);
+                if (facing < 0) std::swap(a, b);          // a mirrored frame reverses the sweep
+                e.p0 = a; e.p1 = b;
+                e.start_angle = std::atan2(a.y() - c.y(), a.x() - c.x());
+                e.end_angle   = std::atan2(b.y() - c.y(), b.x() - c.x());
+            } else {
+                e.p0 = c;
+            }
+            e.center = c;
+            break;
+        }
+        default:
+            throw std::runtime_error(_u8L("use: ellipses cannot be projected yet"));
+        }
+        f.entities.push_back(e);
+    }
+    if (f.entities.empty()) throw std::runtime_error(_u8L("use: produced no entities"));
+}
+
+void CadDocument::apply_project(const std::vector<CadBody>& bodies, CadFeature& f, size_t fi) const
+{
+    if (f.project_from_sketch) { apply_project_from_sketch(f, fi); return; }
     f.entities.clear();
     const int nb = int(bodies.size());
     if (nb == 0) throw std::runtime_error("project: no source body");
@@ -3667,7 +3761,7 @@ bool CadDocument::recompute()
             // Past the skips: this feature is one that means to leave a body behind.
             any_solid_feature = true;
             m_pending_warnings.clear();
-            if (f.type == CadFeatureType::Project) { apply_project(built, f); }
+            if (f.type == CadFeatureType::Project) { apply_project(built, f, fi); }
             else                                   { route_feature(built, f); }
             for (const std::string& w : m_pending_warnings) feature_warnings.emplace_back(int(fi), w);
             m_pending_warnings.clear();

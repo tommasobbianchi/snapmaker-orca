@@ -116,7 +116,7 @@ static const OfferVerb kOfferVerbs[] = {
     {"axis", "Axis", 6, "Shift+A", "key:S+A", nullptr, 0x00000057u, 0, 0, false, false, nullptr, "design_line", "Datum axis (two points, face normal, cylinder centerline, two planes, along edge)"},
     {"coordsys_v", "Coord Sys", 6, "Shift+C", "key:S+C", nullptr, 0x00000043u, 0, 0, false, false, nullptr, "design_point", "Datum coordinate system (world point, or face + direction edge)"},
     {"helix", "Helix", 6, nullptr, "fly:plane#3", nullptr, 0x00000405u, 0, 0, false, false, nullptr, "design_thread", "Helical curve (spring path) — use as a sweep path for coils / springs / augers"},
-    {"project", "Project", 6, nullptr, "fly:plane#4", "Project needs a body — add or import one first", 0x00000482u, 1, 0, false, false, nullptr, "design_sketch", "Project body edges onto a plane as sketch entities"},
+    {"project", "Project", 6, nullptr, "fly:plane#4", "Project needs a body or a sketch — add or import one first", 0x00004482u, 0, 0, false, false, nullptr, "design_sketch", "Project body edges, or a whole sketch (Use), onto a plane"},
     {"measure", "Measure", 6, nullptr, nullptr, nullptr, 0x000b03feu, 0, 0, false, false, nullptr, nullptr, "Measure between the picked points, edges or faces"},
     {"mass_props", "Mass", 6, nullptr, "btn:mass", nullptr, 0x000000feu, 1, 0, false, false, nullptr, "info", "Report the volume and surface area of the selected body"},
     {"interference", "Interference", 6, nullptr, nullptr, nullptr, 0x00000200u, 2, 0, false, false, nullptr, nullptr, "Check whether two bodies overlap — reports, changes nothing"},

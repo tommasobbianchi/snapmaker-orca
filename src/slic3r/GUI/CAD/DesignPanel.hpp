@@ -476,6 +476,10 @@ private:
     // Owns the themed DropDown flyouts (and the item vectors they hold by ref).
     std::vector<std::shared_ptr<void>> m_flyout_keepalive;
     wxCheckBox*       m_construction{nullptr};   // sketch-mode construction toggle
+    // Project card source combo, row by row: >= 0 a body index, <= -2 a SKETCH feature (= -v - 2).
+    // A sketch source is the "Use" flavour: parent-linked, re-projected on every recompute.
+    std::vector<int>  m_proj_src_map;
+    void              fill_project_sources(int editing_feature, bool want_sketch, int want);
     wxCheckBox*       m_grid_snap{nullptr};      // sketch grid snap on/off (persisted)
     wxSpinCtrlDouble* m_grid_step{nullptr};      // snap step, mm (persisted)
     void              push_grid_snap();          // spin/check -> viewport + config

@@ -2317,6 +2317,8 @@ TEST_CASE("a truncated feature keeps what it could read", "[CadDocument][recipe]
     // + the loft end conditions (two ints) appended after the Use link.
     const size_t drop = sizeof(uint32_t) + 3 * sizeof(bool) + 4 * sizeof(cereal::size_type) + sizeof(double)
                         + 4 * sizeof(int);
+    const size_t drop = sizeof(uint32_t) + 3 * sizeof(bool) + 4 * sizeof(cereal::size_type) + sizeof(double)
+                        + 2 * sizeof(int);
     REQUIRE(f_len[1] > drop);
     std::string shortened = blob;
     shortened.erase(f_off[1] + 4 + f_len[1] - drop, drop);
