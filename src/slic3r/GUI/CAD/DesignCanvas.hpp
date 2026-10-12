@@ -56,6 +56,7 @@ public:
     void set_sketch_plane(const SketchPlane& plane);   // re-plane the live sketch when a reference plane is clicked in 3D
     void set_sketch_construction(bool c);
     void set_sketch_grid_snap(bool on, double step);
+    void set_extrude_signed(bool on);
     // Flip the sketch selection between construction and real geometry; returns the
     // number of entities changed (0 = nothing selected, caller falls back to the mode).
     // Open the in-canvas value field on the sketch selection's defining number.
