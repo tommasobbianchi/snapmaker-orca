@@ -4059,7 +4059,10 @@ DesignPanel::DesignPanel(wxWindow* parent)
         m_ref_plane = base;
         m_plane_picked = true;
         m_pick_face = m_pick_face_body = -1;
-        start_sketch_on_target(true);
+        // The Sketch verb (Shift+S): with the plane just chosen it enters sketch mode on it and
+        // hands over the tool menu — this fork's act_sketch is a lambda, not a member.
+        auto it = m_keys_feature.find(SHIFT('S'));
+        if (it != m_keys_feature.end() && it->second) it->second();
     });
 
     // Move-body gizmo (M5): each drag/edit reports the body's new translation. Store it as a
