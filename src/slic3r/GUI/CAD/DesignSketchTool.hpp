@@ -282,6 +282,7 @@ public:
                        std::vector<std::string> labels = {});
     void clear_base_pick();
     std::function<void(int base)> on_datum_base_picked;
+    std::function<void(int base)> on_datum_base_activated;   // double-click on a reference/datum plane: sketch on it
 
     // Visual Fillet/Chamfer gizmo. The Dressup tool is a DesignPanel docked card, so the sketch
     // tool is NOT active during it; when a solid EDGE is picked the panel passes the body centroid

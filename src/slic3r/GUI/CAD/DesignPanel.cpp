@@ -4020,6 +4020,15 @@ DesignPanel::DesignPanel(wxWindow* parent)
             m_status->Refresh();
         }
     });
+    // Double-click a plane = sketch on it. Only from plain Feature mode: inside a card or a
+    // session the click means something else (the Plane card's own base pick above).
+    m_viewport->set_on_datum_base_activated([this](int base) {
+        if (base < 0 || m_active != Tool::None || m_ui_mode != UiMode::Feature) return;
+        m_ref_plane = base;
+        m_plane_picked = true;
+        m_pick_face = m_pick_face_body = -1;
+        start_sketch_on_target(true);
+    });
 
     // Move-body gizmo (M5): each drag/edit reports the body's new translation. Store it as a
     // display-only per-body transform and re-feed the moved meshes (the OCCT shape is untouched,
@@ -6106,6 +6115,8 @@ int DesignPanel::offer_selection_kind() const
     if (m_sel_solid_body >= 0 && m_sel_solid_body < nb)
         return int(CadDocument::is_sheet_shape(m_doc.bodies[m_sel_solid_body].shape)
                    ? OfferSel::BodySheet : OfferSel::BodySolid);
+    if (m_plane_picked)   // a reference or datum plane clicked in 3D: say so, not "Nothing selected"
+        return int(OfferSel::DatumPlane);
     return int(OfferSel::None);
 }
 

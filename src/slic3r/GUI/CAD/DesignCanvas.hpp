@@ -211,6 +211,7 @@ public:
                        std::vector<std::string> labels = {});   // clickable labelled reference planes
     void clear_base_pick();
     void set_on_datum_base_picked(std::function<void(int)> cb);
+    void set_on_datum_base_activated(std::function<void(int)> cb);
     void set_on_sketch_exit(std::function<void()> cb);           // Esc -> exit the tool
     void set_on_sketch_exit_refused(std::function<void()> cb);   // Esc declined: sketch has work
     void set_on_undo_redo(std::function<void(bool /*redo*/)> cb); // Ctrl+Z / Ctrl+Shift+Z
