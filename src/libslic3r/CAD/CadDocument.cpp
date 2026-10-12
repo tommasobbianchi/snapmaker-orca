@@ -3758,8 +3758,10 @@ bool CadDocument::recompute()
             if (f.type == CadFeatureType::Plane)   continue; // datum: no solid, derived on demand
             if (f.type == CadFeatureType::Axis)    continue; // datum axis
             if (f.type == CadFeatureType::CoordSys) continue; // datum coordinate system
-            // Past the skips: this feature is one that means to leave a body behind.
-            any_solid_feature = true;
+            // Past the skips: this feature is one that means to leave a body behind. A Project / Use
+            // makes sketch entities, not a body, so a document of only sketches and projections is
+            // still the legitimate "nothing to build yet" state.
+            if (f.type != CadFeatureType::Project) any_solid_feature = true;
             m_pending_warnings.clear();
             if (f.type == CadFeatureType::Project) { apply_project(built, f, fi); }
             else                                   { route_feature(built, f); }
