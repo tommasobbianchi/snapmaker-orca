@@ -402,7 +402,8 @@ struct CadFeature {
                 pattern_curve_sketch, pattern_curve_entity,
                expr,
                mate_kind, mate_cs_a, mate_cs_b, mate_offset, mate_angle, mate_flip,
-               coordsys_face_kind, coordsys_face_edges);
+               coordsys_face_kind, coordsys_face_edges,
+               loft_start_cond, loft_end_cond);
         imported_solid = brep_from_string(brep);
     }
 };

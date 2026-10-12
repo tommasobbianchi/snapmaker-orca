@@ -5401,17 +5401,12 @@ void DesignPanel::on_add_loft()
         return;
     }
     m_feature_counter++;
-<<<<<<< HEAD
-    m_doc.add_loft(refs, m_loft_ruled->GetValue(), mode,
-                   "Loft" + std::to_string(m_feature_counter));
-=======
     const int loft_idx = m_doc.add_loft(refs, m_loft_ruled->GetValue(), mode,
-                                        feature_name(_L("Loft")));
+                                        "Loft" + std::to_string(m_feature_counter));
     if (loft_idx >= 0 && loft_idx < int(m_doc.features.size())) {
         m_doc.features[loft_idx].loft_start_cond = m_loft_start_cond->GetSelection();
         m_doc.features[loft_idx].loft_end_cond   = m_loft_end_cond->GetSelection();
     }
->>>>>>> 12f8d98df0 (CAD loft: verified N profiles, Normal-to-profile end conditions)
 
     if (!recompute_guarded(_L("Rebuilding model…")))
         set_status(_L("Recompute error: ") + wxString::FromUTF8(m_doc.error));
